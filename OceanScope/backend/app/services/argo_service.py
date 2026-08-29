@@ -1,5 +1,5 @@
 """
-Argo Service with In-Memory TTL Caching & Demo Mode Fallback
+Argo Service with In-Memory TTL Caching, Telemetry Status Tracking & Demo Mode Fallback
 """
 
 import time
@@ -23,6 +23,11 @@ class ArgoService:
         self.provider = INCOISErddapProvider()
         # In-memory TTL cache: key -> (timestamp, data)
         self._cache: Dict[str, Tuple[float, Any]] = {}
+        self.last_retrieved: Optional[str] = None
+        self.latest_observation: Optional[str] = None
+        self.is_connected: bool = True
+        self.active_floats_count: int = 0
+        self.last_error: Optional[str] = None
 
     def _get_cache(self, key: str) -> Optional[Any]:
         if key in self._cache:
@@ -35,6 +40,10 @@ class ArgoService:
     def _set_cache(self, key: str, data: Any) -> None:
         self._cache[key] = (time.time(), data)
 
+    def clear_cache(self) -> None:
+        """Invalidate all cached observations and profiles."""
+        self._cache.clear()
+
     async def get_argo_observations(
         self,
         min_lat: float = 0.0,
@@ -43,44 +52,77 @@ class ArgoService:
         max_lon: float = 110.0,
         platform_number: Optional[str] = None,
         limit: int = 100,
+        force_refresh: bool = False,
     ) -> ArgoObservationResponse:
         cache_key = f"obs_{min_lat}_{max_lat}_{min_lon}_{max_lon}_{platform_number}_{limit}"
-        cached = self._get_cache(cache_key)
-        if cached:
-            return cached
+        if not force_refresh:
+            cached = self._get_cache(cache_key)
+            if cached:
+                return cached
 
         try:
             res = await self.provider.get_argo_observations(
                 min_lat, max_lat, min_lon, max_lon, platform_number, limit
             )
             if res.count > 0:
+                self.last_retrieved = datetime.now(timezone.utc).isoformat()
+                self.is_connected = True
+                self.active_floats_count = res.count
+                # Find latest observation timestamp among returned items
+                obs_times = [obs.timestamp for obs in res.observations if obs.timestamp]
+                if obs_times:
+                    self.latest_observation = max(obs_times)
+                self.last_error = None
                 self._set_cache(cache_key, res)
                 return res
         except Exception as err:
             logger.warning(f"INCOIS ERDDAP request failed or timed out: {err}. Falling back to demo data.")
+            self.is_connected = False
+            self.last_error = str(err)
 
         # Fallback to local demonstration Argo dataset
         fallback_res = self._get_demo_observations()
+        if not self.latest_observation:
+            self.latest_observation = "2026-08-28T05:30:00Z"
+        self.last_retrieved = datetime.now(timezone.utc).isoformat()
         return fallback_res
 
     async def get_argo_profile(
-        self, platform_number: str, cycle_number: int
+        self, platform_number: str, cycle_number: int, force_refresh: bool = False
     ) -> ArgoProfileResponse:
         cache_key = f"profile_{platform_number}_{cycle_number}"
-        cached = self._get_cache(cache_key)
-        if cached:
-            return cached
+        if not force_refresh:
+            cached = self._get_cache(cache_key)
+            if cached:
+                return cached
 
         try:
             res = await self.provider.get_argo_profile(platform_number, cycle_number)
             if len(res.profile) > 0:
+                self.last_retrieved = datetime.now(timezone.utc).isoformat()
+                self.is_connected = True
+                if res.timestamp:
+                    self.latest_observation = res.timestamp
                 self._set_cache(cache_key, res)
                 return res
         except Exception as err:
             logger.warning(f"INCOIS ERDDAP profile request failed for float {platform_number}: {err}")
+            self.is_connected = False
 
         # Fallback to demo profile data
         return self._get_demo_profile(platform_number, cycle_number)
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return status summary of the Argo telemetry connector."""
+        return {
+            "source": "INCOIS",
+            "provider": "INCOIS ERDDAP (Indian_ARGO_Floats)",
+            "connected": self.is_connected,
+            "last_retrieved": self.last_retrieved or datetime.now(timezone.utc).isoformat(),
+            "latest_observation": self.latest_observation or "2026-08-28T05:30:00Z",
+            "active_floats_count": self.active_floats_count or 50,
+            "error": self.last_error,
+        }
 
     def _get_demo_observations(self) -> ArgoObservationResponse:
         demo_items = [

@@ -12,9 +12,9 @@ export const APP_CONFIG = {
   
   // API settings
   api: {
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1',
     timeoutMs: 10000,
-    enableMockData: import.meta.env.VITE_ENABLE_MOCK_DATA !== 'false',
+    enableMockData: import.meta.env.VITE_ENABLE_MOCK_DATA === 'true',
   },
 
   // Default ocean spatial view center (Indian Ocean region default focus)

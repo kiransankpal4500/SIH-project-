@@ -86,6 +86,8 @@ class ArgoObservationItem(BaseModel):
     pressure: Optional[float] = None
     temperature: Optional[float] = None
     salinity: Optional[float] = None
+    qc_flag: Optional[int] = 1
+    qc_status: str = "PASSED"
 
 
 class ArgoObservationResponse(BaseModel):
@@ -94,12 +96,16 @@ class ArgoObservationResponse(BaseModel):
     retrieved_at: str
     data_time_range: Optional[str] = "Historical & Recent Operational Runs"
     units: Dict[str, str] = {
-        "temperature": "degree_Celsius",
+        "temperature": "°C",
         "salinity": "PSU",
-        "pressure": "decibar",
+        "pressure": "dbar",
     }
     is_live_data: bool = True
     count: int
+    valid_count: Optional[int] = None
+    missing_count: Optional[int] = None
+    qc_pass_count: Optional[int] = None
+    qc_fail_count: Optional[int] = None
     observations: List[ArgoObservationItem]
 
 
@@ -107,6 +113,8 @@ class ArgoProfileLevelItem(BaseModel):
     pressure: float
     temperature: Optional[float] = None
     salinity: Optional[float] = None
+    qc_flag: Optional[int] = 1
+    qc_status: str = "PASSED"
 
 
 class ArgoProfileResponse(BaseModel):
@@ -119,9 +127,13 @@ class ArgoProfileResponse(BaseModel):
     timestamp: Optional[str] = None
     retrieved_at: str
     units: Dict[str, str] = {
-        "temperature": "degree_Celsius",
+        "temperature": "°C",
         "salinity": "PSU",
-        "pressure": "decibar",
+        "pressure": "dbar",
     }
     is_live_data: bool = True
+    valid_count: Optional[int] = None
+    missing_count: Optional[int] = None
+    qc_pass_count: Optional[int] = None
+    qc_fail_count: Optional[int] = None
     profile: List[ArgoProfileLevelItem]

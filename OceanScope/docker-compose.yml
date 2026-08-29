@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - CORS_ORIGINS=http://localhost:3000,http://localhost
+      - INCOIS_ERDDAP_BASE_URL=https://erddap.incois.gov.in/erddap/
+      - HYCOM_DATA_DIRECTORY=/app/data/netcdf/hycom
+      - CACHE_EXPIRATION_SECONDS=600
+    volumes:
+      - ./backend/data/netcdf:/app/data/netcdf
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000/api/v1
+        VITE_APP_TITLE: OceanScope
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -39,63 +39,71 @@ export const ModelVsObsComparisonChart: React.FC<ModelVsObsComparisonChartProps>
   const chartData = isReal
     ? comparisonData.map((item) => ({
         depth: item.depth,
+        depthValue: item.depth,
         hycomModel: variable === 'temperature' ? item.model_temperature : item.model_salinity,
         argoObservation: variable === 'temperature' ? item.observed_temperature : item.observed_salinity,
         delta: variable === 'temperature' ? item.temperature_difference : item.salinity_difference,
       }))
-    : mockComparisonData;
+    : mockComparisonData.map(d => ({ ...d, depthValue: d.depth }));
 
-  const domain: [number, number] = variable === 'temperature' ? [0, 35] : [30, 38];
+  const valDomain: [number, number] = variable === 'temperature' ? [0, 35] : [30, 38];
 
   return (
-    <div className="space-y-1">
-      {isReal && (
-        <div className="flex items-center gap-2 text-[10px] font-mono">
-          <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded">
-            REAL INCOIS DATA
-          </span>
-          <span className="text-slate-400">
-            {comparisonData.length} depth levels · {variable === 'temperature' ? 'Temperature' : 'Salinity'}
-          </span>
-        </div>
-      )}
+    <div className="space-y-2">
       <div style={{ height: `${height}px` }} className="w-full font-mono text-xs">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1C2541" />
-            <XAxis dataKey="depth" unit="m" stroke="#94A3B8" tick={{ fontSize: 11 }} />
-            <YAxis domain={domain} unit={unit} stroke="#94A3B8" tick={{ fontSize: 11 }} />
+          <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
+            <XAxis
+              dataKey="depthValue"
+              unit="m"
+              stroke="#64748b"
+              tick={{ fontSize: 10 }}
+            />
+            <YAxis
+              domain={valDomain}
+              unit={` ${unit}`}
+              stroke="#64748b"
+              tick={{ fontSize: 10 }}
+            />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0B132B',
-                borderColor: isReal ? '#10B981' : '#00B4D8',
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: '#F1F5F9',
+                backgroundColor: '#0b1220',
+                borderColor: '#334155',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: '#f1f5f9',
               }}
               formatter={(value: number, name: string) => [
-                `${value?.toFixed(2)} ${unit}`,
+                `${Number(value)?.toFixed(3)} ${unit}`,
                 name,
               ]}
             />
-            <Legend wrapperStyle={{ paddingTop: '10px' }} />
+            <Legend
+              wrapperStyle={{
+                paddingTop: '6px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+              }}
+            />
             <Line
               type="monotone"
               dataKey="hycomModel"
-              name={`HYCOM Model (${unit})`}
-              stroke="#00B4D8"
-              strokeWidth={2.5}
-              dot={{ r: 4, fill: '#00B4D8' }}
+              name={`HYCOM Forecast (${unit})`}
+              stroke="#38bdf8"
+              strokeWidth={2}
+              dot={{ r: 3, fill: '#38bdf8' }}
               connectNulls
             />
             <Line
               type="monotone"
               dataKey="argoObservation"
-              name={`Argo Observation (${unit})`}
-              stroke="#10B981"
-              strokeWidth={2.5}
-              strokeDasharray="4 4"
-              dot={{ r: 4, fill: '#10B981' }}
+              name={`Argo In-Situ (${unit})`}
+              stroke="#10b981"
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              dot={{ r: 3, fill: '#10b981' }}
               connectNulls
             />
           </LineChart>

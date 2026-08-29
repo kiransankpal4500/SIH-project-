@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { Card } from '../common/Card';
 import { ModelVsObsComparisonChart } from '../charts/ModelVsObsComparisonChart';
-import { Badge } from '../common/Badge';
 import { useOceanContext } from '../../store/OceanContext';
-import { GitCompareArrows, Loader, AlertTriangle, MapPin, Clock, Thermometer, Droplets } from 'lucide-react';
+import { GitCompareArrows, Loader, AlertTriangle, MapPin, Clock, Thermometer, Droplets, ArrowRight } from 'lucide-react';
 
 export const ModelComparisonPlaceholder: React.FC = () => {
   const { state, fetchHycomComparison } = useOceanContext();
@@ -17,223 +15,216 @@ export const ModelComparisonPlaceholder: React.FC = () => {
     }
   };
 
-  // Real comparison loaded
   if (comp) {
     return (
-      <div className="space-y-3">
-        {/* Header Card */}
-        <Card
-          title="INCOIS HYCOM Model vs. Argo Float Observation"
-          subtitle={`Float #${comp.platform_number} · Cycle #${comp.cycle_number} — Real Data Comparison`}
-          action={
-            <div className="flex items-center gap-1.5">
-              <Badge variant="emerald">REAL DATA</Badge>
-              <Badge variant="cyan">{comp.source_model}</Badge>
+      <div className="bg-[#0b1220] border border-slate-800 rounded p-3 font-mono text-xs space-y-3">
+        {/* Header Strip */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+          <div>
+            <div className="text-xs font-bold text-slate-100 font-sans flex items-center gap-1.5">
+              <GitCompareArrows className="w-4 h-4 text-cyan-400" />
+              INCOIS HYCOM MODEL VS. ARGO IN-SITU PROFILE
             </div>
-          }
-        >
-          {/* Matching Metadata */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {/* Spatial Matching */}
-            <div className="bg-ocean-900/60 border border-ocean-800 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mb-2">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-                SPATIAL MATCHING
-              </div>
-              <div className="space-y-1 text-[11px] font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Observation:</span>
-                  <span className="text-emerald-300">{comp.observation_latitude.toFixed(2)}°N, {comp.observation_longitude.toFixed(2)}°E</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Model Grid:</span>
-                  <span className="text-cyan-300">{comp.model_latitude.toFixed(2)}°N, {comp.model_longitude.toFixed(2)}°E</span>
-                </div>
-                <div className="flex justify-between border-t border-ocean-800 pt-1 mt-1">
-                  <span className="text-slate-400">Distance:</span>
-                  <span className="text-amber-300 font-bold">{comp.distance_km} km</span>
-                </div>
-              </div>
+            <div className="text-[10px] text-slate-400">
+              Platform #{comp.platform_number} · Cycle #{comp.cycle_number} · Grid File: {comp.selected_file || 'RSMC_hycom_20260829.nc'}
             </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 rounded font-semibold">
+              REAL DATA MATCHED
+            </span>
+          </div>
+        </div>
 
-            {/* Time Matching */}
-            <div className="bg-ocean-900/60 border border-ocean-800 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mb-2">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                TIME MATCHING
-              </div>
-              <div className="space-y-1 text-[11px] font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Observation:</span>
-                  <span className="text-emerald-300">{comp.observation_time?.slice(0, 10) || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Model Time:</span>
-                  <span className="text-cyan-300">{comp.model_time?.slice(0, 10) || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between border-t border-ocean-800 pt-1 mt-1">
-                  <span className="text-slate-400">Offset:</span>
-                  <span className="text-amber-300 font-bold">{comp.time_difference_hours} hrs</span>
-                </div>
-              </div>
+        {/* Spatial, Temporal & Error Metrics Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {/* Spatial Match */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-1 text-[10px]">
+            <div className="flex items-center gap-1 text-slate-400 font-semibold mb-1">
+              <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+              SPATIAL CO-LOCATION
             </div>
-
-            {/* Statistical Metrics */}
-            <div className="bg-ocean-900/60 border border-ocean-800 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mb-2">
-                <GitCompareArrows className="w-3.5 h-3.5 text-cyan-400" />
-                ERROR METRICS
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
-                <div className="flex items-center gap-1">
-                  <Thermometer className="w-3 h-3 text-red-400" />
-                  <span className="text-slate-400">T Bias:</span>
-                </div>
-                <span className="text-right text-red-300 font-bold">{comp.temp_bias?.toFixed(3) ?? 'N/A'}°C</span>
-
-                <div className="flex items-center gap-1">
-                  <Thermometer className="w-3 h-3 text-red-400" />
-                  <span className="text-slate-400">T RMSE:</span>
-                </div>
-                <span className="text-right text-red-300 font-bold">{comp.temp_rmse?.toFixed(3) ?? 'N/A'}°C</span>
-
-                <div className="flex items-center gap-1">
-                  <Droplets className="w-3 h-3 text-blue-400" />
-                  <span className="text-slate-400">S Bias:</span>
-                </div>
-                <span className="text-right text-blue-300 font-bold">{comp.sal_bias?.toFixed(3) ?? 'N/A'} PSU</span>
-
-                <div className="flex items-center gap-1">
-                  <Droplets className="w-3 h-3 text-blue-400" />
-                  <span className="text-slate-400">S RMSE:</span>
-                </div>
-                <span className="text-right text-blue-300 font-bold">{comp.sal_rmse?.toFixed(3) ?? 'N/A'} PSU</span>
-              </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Observation:</span>
+              <span className="text-emerald-300">{comp.observation_latitude.toFixed(3)}°N, {comp.observation_longitude.toFixed(3)}°E</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">HYCOM Grid:</span>
+              <span className="text-cyan-300">{comp.model_latitude.toFixed(3)}°N, {comp.model_longitude.toFixed(3)}°E</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-800 pt-1 text-slate-300">
+              <span>Haversine Separation:</span>
+              <span className="text-amber-300 font-bold">{comp.distance_km} km</span>
             </div>
           </div>
 
-          {/* Variable Tabs + Chart */}
-          <div className="flex items-center gap-2 mb-2">
+          {/* Temporal Match */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-1 text-[10px]">
+            <div className="flex items-center gap-1 text-slate-400 font-semibold mb-1">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              TEMPORAL MATCHING
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Observation Time:</span>
+              <span className="text-emerald-300">{comp.observation_time?.slice(0, 16).replace('T', ' ') || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Model Timestep:</span>
+              <span className="text-cyan-300">{comp.model_time?.slice(0, 16).replace('T', ' ') || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-800 pt-1 text-slate-300">
+              <span>Offset Difference:</span>
+              <span className="text-amber-300 font-bold">{comp.time_difference_hours} hrs</span>
+            </div>
+          </div>
+
+          {/* Statistical Error Metrics */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-1 text-[10px]">
+            <div className="flex items-center gap-1 text-slate-400 font-semibold mb-1">
+              <GitCompareArrows className="w-3.5 h-3.5 text-cyan-400" />
+              STATISTICAL ERROR
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Temp Bias (Mean Err):</span>
+              <span className="text-red-300 font-bold">{comp.temp_bias != null ? `${comp.temp_bias > 0 ? '+' : ''}${comp.temp_bias.toFixed(3)} °C` : 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Temp RMSE / MAE:</span>
+              <span className="text-slate-200">{comp.temp_rmse?.toFixed(3) ?? 'N/A'} / {comp.temp_mae?.toFixed(3) ?? 'N/A'} °C</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-800 pt-1">
+              <span className="text-slate-400">Salinity Bias:</span>
+              <span className="text-cyan-300 font-bold">{comp.sal_bias != null ? `${comp.sal_bias > 0 ? '+' : ''}${comp.sal_bias.toFixed(3)} PSU` : 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Variable Switcher */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setChartVariable('temperature')}
-              className={`px-3 py-1 text-[11px] font-mono rounded border transition-colors ${
+              className={`px-2.5 py-1 text-[11px] rounded border transition-colors ${
                 chartVariable === 'temperature'
-                  ? 'bg-red-500/20 border-red-500/50 text-red-300'
-                  : 'bg-ocean-900 border-ocean-700 text-slate-400 hover:text-white'
+                  ? 'bg-slate-800 border-red-500/40 text-red-300 font-semibold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
               }`}
             >
-              Temperature
+              Temperature Comparison
             </button>
             <button
               onClick={() => setChartVariable('salinity')}
-              className={`px-3 py-1 text-[11px] font-mono rounded border transition-colors ${
+              className={`px-2.5 py-1 text-[11px] rounded border transition-colors ${
                 chartVariable === 'salinity'
-                  ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                  : 'bg-ocean-900 border-ocean-700 text-slate-400 hover:text-white'
+                  ? 'bg-slate-800 border-cyan-500/40 text-cyan-300 font-semibold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
               }`}
             >
-              Salinity
+              Salinity Comparison
             </button>
           </div>
-          <ModelVsObsComparisonChart
-            height={280}
-            comparisonData={comp.profile_comparison}
-            variable={chartVariable}
-          />
 
-          {/* Depth Profile Table */}
-          <div className="mt-3 max-h-48 overflow-y-auto border border-ocean-800 rounded-lg">
-            <table className="w-full text-[11px] font-mono">
-              <thead className="sticky top-0 bg-ocean-900 text-slate-400">
-                <tr>
-                  <th className="px-2 py-1.5 text-left">Depth (m)</th>
-                  <th className="px-2 py-1.5 text-right">Model T (°C)</th>
-                  <th className="px-2 py-1.5 text-right">Obs T (°C)</th>
-                  <th className="px-2 py-1.5 text-right">ΔT (°C)</th>
-                  <th className="px-2 py-1.5 text-right">Model S (PSU)</th>
-                  <th className="px-2 py-1.5 text-right">Obs S (PSU)</th>
-                  <th className="px-2 py-1.5 text-right">ΔS (PSU)</th>
+          <span className="text-[10px] text-slate-400">
+            {comp.profile_comparison.length} Paired Depth Layers
+          </span>
+        </div>
+
+        {/* Chart View */}
+        <ModelVsObsComparisonChart
+          height={260}
+          comparisonData={comp.profile_comparison}
+          variable={chartVariable}
+        />
+
+        {/* Numerical Delta Profile Table */}
+        <div className="max-h-44 overflow-y-auto border border-slate-800 rounded">
+          <table className="w-full text-[10px] font-mono">
+            <thead className="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-800">
+              <tr>
+                <th className="px-2 py-1 text-left">Depth (m)</th>
+                <th className="px-2 py-1 text-right">HYCOM T (°C)</th>
+                <th className="px-2 py-1 text-right">Argo T (°C)</th>
+                <th className="px-2 py-1 text-right">ΔT (°C)</th>
+                <th className="px-2 py-1 text-right">HYCOM S (PSU)</th>
+                <th className="px-2 py-1 text-right">Argo S (PSU)</th>
+                <th className="px-2 py-1 text-right">ΔS (PSU)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-850">
+              {comp.profile_comparison.map((row, i) => (
+                <tr key={i} className="hover:bg-slate-900/60">
+                  <td className="px-2 py-1 text-slate-200">{row.depth}</td>
+                  <td className="px-2 py-1 text-right text-cyan-300">{row.model_temperature?.toFixed(2) ?? '—'}</td>
+                  <td className="px-2 py-1 text-right text-emerald-300">{row.observed_temperature?.toFixed(2) ?? '—'}</td>
+                  <td className={`px-2 py-1 text-right font-bold ${
+                    row.temperature_difference != null
+                      ? row.temperature_difference > 0 ? 'text-red-400' : 'text-cyan-400'
+                      : 'text-slate-500'
+                  }`}>
+                    {row.temperature_difference != null ? (row.temperature_difference > 0 ? '+' : '') + row.temperature_difference.toFixed(3) : '—'}
+                  </td>
+                  <td className="px-2 py-1 text-right text-cyan-300">{row.model_salinity?.toFixed(2) ?? '—'}</td>
+                  <td className="px-2 py-1 text-right text-emerald-300">{row.observed_salinity?.toFixed(2) ?? '—'}</td>
+                  <td className={`px-2 py-1 text-right font-bold ${
+                    row.salinity_difference != null
+                      ? row.salinity_difference > 0 ? 'text-red-400' : 'text-cyan-400'
+                      : 'text-slate-500'
+                  }`}>
+                    {row.salinity_difference != null ? (row.salinity_difference > 0 ? '+' : '') + row.salinity_difference.toFixed(3) : '—'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {comp.profile_comparison.map((row, i) => (
-                  <tr key={i} className="border-t border-ocean-850 hover:bg-ocean-900/50">
-                    <td className="px-2 py-1 text-white">{row.depth}</td>
-                    <td className="px-2 py-1 text-right text-cyan-300">{row.model_temperature?.toFixed(2) ?? '—'}</td>
-                    <td className="px-2 py-1 text-right text-emerald-300">{row.observed_temperature?.toFixed(2) ?? '—'}</td>
-                    <td className={`px-2 py-1 text-right font-bold ${
-                      row.temperature_difference != null
-                        ? row.temperature_difference > 0 ? 'text-red-400' : 'text-blue-400'
-                        : 'text-slate-500'
-                    }`}>
-                      {row.temperature_difference != null ? (row.temperature_difference > 0 ? '+' : '') + row.temperature_difference.toFixed(3) : '—'}
-                    </td>
-                    <td className="px-2 py-1 text-right text-cyan-300">{row.model_salinity?.toFixed(2) ?? '—'}</td>
-                    <td className="px-2 py-1 text-right text-emerald-300">{row.observed_salinity?.toFixed(2) ?? '—'}</td>
-                    <td className={`px-2 py-1 text-right font-bold ${
-                      row.salinity_difference != null
-                        ? row.salinity_difference > 0 ? 'text-red-400' : 'text-blue-400'
-                        : 'text-slate-500'
-                    }`}>
-                      {row.salinity_difference != null ? (row.salinity_difference > 0 ? '+' : '') + row.salinity_difference.toFixed(3) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
 
-  // No comparison yet — show action prompt or loading
+  // Initial / Unselected State
   return (
-    <Card
-      title="Numerical Ocean Model vs. In-Situ Argo Observation Comparison"
-      subtitle="INCOIS HYCOM Model vs. Real Argo Float Telemetry"
-      action={
-        state.hycomLoading ? (
-          <Badge variant="cyan">
-            <Loader className="w-3 h-3 animate-spin inline mr-1" />
-            Loading...
-          </Badge>
-        ) : state.selectedPlatformId ? (
+    <div className="bg-[#0b1220] border border-slate-800 rounded p-4 font-mono text-xs space-y-3">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div className="text-xs font-bold text-slate-100 font-sans flex items-center gap-1.5">
+          <GitCompareArrows className="w-4 h-4 text-cyan-400" />
+          MODEL VS. OBSERVATION CROSS-VALIDATION
+        </div>
+        {state.hycomLoading && (
+          <span className="text-cyan-300 flex items-center gap-1 text-[11px]">
+            <Loader className="w-3 h-3 animate-spin" /> Fetching NetCDF grid...
+          </span>
+        )}
+      </div>
+
+      {state.hycomError && (
+        <div className="flex items-center gap-2 text-amber-300 text-[11px] bg-amber-950/40 border border-amber-500/40 p-2 rounded">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>{state.hycomError}</span>
+        </div>
+      )}
+
+      {state.selectedPlatformId ? (
+        <div className="text-center py-6 space-y-2">
+          <p className="text-slate-300 text-xs">
+            Argo Float <span className="font-bold text-emerald-400">#{state.selectedPlatformId}</span> selected.
+          </p>
           <button
             onClick={handleCompare}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-mono rounded-md border border-emerald-500/50 transition-colors"
+            disabled={state.hycomLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold rounded text-xs transition-colors"
           >
             <GitCompareArrows className="w-3.5 h-3.5" />
-            Compare HYCOM vs Float #{state.selectedPlatformId}
+            <span>Execute Model vs. Float #{state.selectedPlatformId} Validation</span>
           </button>
-        ) : (
-          <Badge variant="emerald">BIAS DELTA: +0.25°C AVG</Badge>
-        )
-      }
-    >
-      {state.hycomError && (
-        <div className="flex items-center gap-2 text-amber-400 text-[11px] font-mono bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-md mb-3">
-          <AlertTriangle className="w-4 h-4" />
-          {state.hycomError}
         </div>
-      )}
-
-      {state.selectedPlatformId && !state.hycomLoading && (
-        <div className="text-center py-6 text-slate-400 text-sm font-mono">
-          <GitCompareArrows className="w-8 h-8 mx-auto mb-2 text-cyan-500/50" />
-          <p>Click "Compare HYCOM vs Float #{state.selectedPlatformId}" to run</p>
-          <p className="text-[11px] mt-1">real INCOIS HYCOM NetCDF model vs. Argo observation comparison</p>
-        </div>
-      )}
-
-      {!state.selectedPlatformId && (
-        <>
-          <div className="text-center py-4 text-slate-400 text-[11px] font-mono mb-2">
-            <p>Select an Argo float from the 3D globe (enable LIVE mode) to compare with HYCOM model data</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="text-slate-400 text-[11px] py-1 text-center">
+            Select any active Argo float on the 3D globe to run real-time spatial and vertical profile cross-validation against the INCOIS HYCOM model grid.
           </div>
-          <ModelVsObsComparisonChart height={280} />
-        </>
+          <ModelVsObsComparisonChart height={240} />
+        </div>
       )}
-    </Card>
+    </div>
   );
 };

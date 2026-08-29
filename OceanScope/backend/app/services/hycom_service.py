@@ -1,10 +1,9 @@
 """
 INCOIS HYCOM NetCDF Model Ingestion & Analysis Service
-Opens and processes NetCDF datasets using xarray, netCDF4, and numpy.
+High-Performance Multi-File Engine with Dynamic File Selection, xarray Slicing, Query Caching, and Argo Cross-Validation.
 """
 
-import os
-import glob
+import time
 import math
 import logging
 from datetime import datetime
@@ -14,157 +13,91 @@ import xarray as xr
 import pandas as pd
 
 from app.core.config import settings
+from app.core.query_cache import global_query_cache, QueryCache
+from app.core.quality_control import validate_temperature, validate_salinity, is_fill_value, compute_metrics
 from app.schemas.hycom_schemas import (
     OceanModelPoint,
     OceanModelProfileLevel,
     OceanModelProfile,
     OceanModelCurrent,
     OceanModelMetadata,
+    OceanModelTimeseriesResponse,
     ModelObservationComparisonItem,
     ModelObservationComparisonResponse,
 )
+from app.services.hycom_dataset_manager import hycom_dataset_manager, HYCOMDatasetManager
 
 logger = logging.getLogger("oceanscope.hycom_service")
 
 
 class INCOISHYCOMService:
-    def __init__(self, data_dir: Optional[str] = None):
-        self.data_dir = data_dir or settings.HYCOM_DATA_DIRECTORY
-        self._dataset: Optional[xr.Dataset] = None
-        self._current_file: Optional[str] = None
-        self._var_mapping: Dict[str, str] = {}
-        self._dim_mapping: Dict[str, str] = {}
-        self._cache: Dict[str, Tuple[float, Any]] = {}
+    def __init__(
+        self,
+        dataset_manager: Optional[HYCOMDatasetManager] = None,
+        cache: Optional[QueryCache] = None,
+    ):
+        self.dataset_manager = dataset_manager or hycom_dataset_manager
+        self.cache = cache or global_query_cache
         self.cache_ttl = 300  # 5 minutes TTL
 
     @staticmethod
     def _to_naive_datetime64(time_str: str) -> np.datetime64:
-        """Convert an ISO time string to a timezone-naive np.datetime64[ns] matching NetCDF coords."""
-        return np.datetime64(pd.Timestamp(time_str).tz_localize(None), 'ns')
+        """Convert an ISO time string to a timezone-naive np.datetime64[ns]."""
+        ts = pd.to_datetime(time_str)
+        if hasattr(ts, 'tz') and ts.tz is not None:
+            ts = ts.tz_convert('UTC').tz_localize(None)
+        return np.datetime64(ts, 'ns')
 
-    def _discover_netcdf_file(self) -> Optional[str]:
-        """Find available HYCOM NetCDF files in storage directory."""
-        if not os.path.exists(self.data_dir):
-            return None
-        nc_files = sorted(glob.glob(os.path.join(self.data_dir, "*.nc")) + glob.glob(os.path.join(self.data_dir, "*.nc4")))
-        return nc_files[-1] if nc_files else None
+    @staticmethod
+    def validate_coordinates(latitude: float, longitude: float, depth: float = 0.0) -> None:
+        """Validate spatial coordinates and depth bounds."""
+        if not (-90.0 <= latitude <= 90.0):
+            raise ValueError(f"Latitude {latitude}° is outside valid bounds (-90.0 to 90.0°).")
+        if not (-180.0 <= longitude <= 360.0):
+            raise ValueError(f"Longitude {longitude}° is outside valid bounds (-180.0 to 360.0°).")
+        if depth < 0.0 or depth > 6000.0:
+            raise ValueError(f"Depth {depth}m is outside valid oceanographic range (0 to 6000m).")
+
+    @staticmethod
+    def validate_timeseries_bounds(start_time: Optional[str], end_time: Optional[str]) -> None:
+        """Validate timeseries query parameters and enforce duration limits."""
+        if start_time and end_time:
+            t_start = pd.to_datetime(start_time)
+            t_end = pd.to_datetime(end_time)
+            if t_start > t_end:
+                raise ValueError(f"start_time ({start_time}) cannot be later than end_time ({end_time}).")
+            if (t_end - t_start).days > 365:
+                raise ValueError("Requested timeseries window exceeds maximum permitted duration of 365 days.")
 
     def get_dataset(self) -> Tuple[Optional[xr.Dataset], Optional[str]]:
-        """Open or return existing xarray dataset lazily."""
-        nc_file = self._discover_netcdf_file()
-        if not nc_file:
+        """Backwards-compatible helper returning the primary active xarray dataset."""
+        meta = self.dataset_manager.get_aggregate_metadata()
+        if not meta.is_available or not meta.available_files:
             return None, "No HYCOM NetCDF datasets found in data directory."
 
-        if self._dataset is not None and self._current_file == nc_file:
-            return self._dataset, None
+        catalog = self.dataset_manager.refresh_catalog()
+        valid_entries = [e for e in catalog.values() if e.is_valid]
+        if not valid_entries:
+            return None, "No valid HYCOM NetCDF files discovered."
 
-        try:
-            # Open dataset lazily with xarray
-            ds = xr.open_dataset(nc_file, engine="netcdf4")
-            self._dataset = ds
-            self._current_file = nc_file
-            self._inspect_and_map_metadata(ds)
-            logger.info(f"Loaded INCOIS HYCOM dataset: {nc_file}")
-            return self._dataset, None
-        except Exception as e:
-            logger.error(f"Failed to open NetCDF file {nc_file}: {e}")
-            return None, f"Error opening NetCDF file: {str(e)}"
-
-    def _inspect_and_map_metadata(self, ds: xr.Dataset):
-        """Inspect xarray dataset dimensions and variable names dynamically."""
-        self._dim_mapping = {}
-        self._var_mapping = {}
-
-        # 1. Map Spatial & Temporal Dimensions
-        for dim_name in ds.dims:
-            d_lower = str(dim_name).lower()
-            if d_lower in ["lat", "latitude", "nav_lat", "y"]:
-                self._dim_mapping["latitude"] = str(dim_name)
-            elif d_lower in ["lon", "longitude", "nav_lon", "x"]:
-                self._dim_mapping["longitude"] = str(dim_name)
-            elif d_lower in ["depth", "lev", "level", "z", "deptht"]:
-                self._dim_mapping["depth"] = str(dim_name)
-            elif d_lower in ["time", "t", "date"]:
-                self._dim_mapping["time"] = str(dim_name)
-
-        # Fallback coordinate inspection if dims are unmapped
-        for coord_name in ds.coords:
-            c_lower = str(coord_name).lower()
-            if "latitude" not in self._dim_mapping and c_lower in ["lat", "latitude"]:
-                self._dim_mapping["latitude"] = str(coord_name)
-            if "longitude" not in self._dim_mapping and c_lower in ["lon", "longitude"]:
-                self._dim_mapping["longitude"] = str(coord_name)
-            if "depth" not in self._dim_mapping and c_lower in ["depth", "lev", "level"]:
-                self._dim_mapping["depth"] = str(coord_name)
-            if "time" not in self._dim_mapping and c_lower in ["time", "t"]:
-                self._dim_mapping["time"] = str(coord_name)
-
-        # 2. Map Physical Variables
-        for var_name in ds.data_vars:
-            v_lower = str(var_name).lower()
-            long_name = str(ds[var_name].attrs.get("long_name", "")).lower()
-            std_name = str(ds[var_name].attrs.get("standard_name", "")).lower()
-
-            if "temperature" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["water_temp", "temp", "temperature", "votemper"]):
-                self._var_mapping["temperature"] = str(var_name)
-            elif "salinity" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["salinity", "sal", "vosaline"]):
-                self._var_mapping["salinity"] = str(var_name)
-            elif "current_u" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["water_u", "u_current", "u", "eastward", "vozocrtx"]):
-                self._var_mapping["current_u"] = str(var_name)
-            elif "current_v" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["water_v", "v_current", "v", "northward", "vomecrty"]):
-                self._var_mapping["current_v"] = str(var_name)
-            elif "ssh" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["surf_el", "ssh", "sossheig", "elevation"]):
-                self._var_mapping["ssh"] = str(var_name)
-            elif "mld" not in self._var_mapping and any(k in v_lower or k in long_name or k in std_name for k in ["mld", "mixed_layer", "somxl010"]):
-                self._var_mapping["mld"] = str(var_name)
+        ds = self.dataset_manager.get_dataset_for_file(valid_entries[-1].filepath)
+        if ds is None:
+            return None, f"Failed to load dataset for {valid_entries[-1].filename}"
+        return ds, None
 
     def get_metadata(self) -> OceanModelMetadata:
-        """Fetch metadata for the active INCOIS HYCOM dataset."""
-        ds, err = self.get_dataset()
-        if not ds:
-            return OceanModelMetadata(
-                filename="None",
-                is_available=False,
-                dimensions={},
-                discovered_variables=[],
-                mapped_variables={},
-                time_range=[],
-                depth_levels=[],
-                lat_min=0.0,
-                lat_max=0.0,
-                lon_min=0.0,
-                lon_max=0.0,
-            )
+        """Fetch aggregated multi-file metadata for all available INCOIS HYCOM datasets."""
+        t0 = time.time()
+        cache_key = "hycom_meta_aggregate"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Metadata retrieved in {(time.time() - t0)*1000:.2f}ms")
+            return cached
 
-        lat_dim = self._dim_mapping.get("latitude", "latitude")
-        lon_dim = self._dim_mapping.get("longitude", "longitude")
-        depth_dim = self._dim_mapping.get("depth", "depth")
-        time_dim = self._dim_mapping.get("time", "time")
-
-        lats = ds[lat_dim].values if lat_dim in ds else np.array([0.0])
-        lons = ds[lon_dim].values if lon_dim in ds else np.array([0.0])
-        depths = ds[depth_dim].values.tolist() if depth_dim in ds else [0.0]
-        
-        times = []
-        if time_dim in ds:
-            times = [pd.to_datetime(t).strftime("%Y-%m-%dT%H:%M:%SZ") for t in ds[time_dim].values]
-
-        return OceanModelMetadata(
-            source="INCOIS",
-            model="HYCOM",
-            dataset="INCOIS_RSMC_HYCOM",
-            filename=os.path.basename(self._current_file or "unknown.nc"),
-            is_available=True,
-            dimensions={str(k): int(v) for k, v in ds.sizes.items()},
-            discovered_variables=list(ds.data_vars.keys()),
-            mapped_variables=self._var_mapping,
-            time_range=times,
-            depth_levels=[float(d) for d in depths],
-            lat_min=float(np.min(lats)),
-            lat_max=float(np.max(lats)),
-            lon_min=float(np.min(lons)),
-            lon_max=float(np.max(lons)),
-        )
+        meta = self.dataset_manager.get_aggregate_metadata()
+        self.cache.set(cache_key, meta, ttl=self.cache_ttl)
+        logger.info(f"[CACHE MISS] HYCOM metadata aggregated ({meta.file_count} files) in {(time.time() - t0)*1000:.2f}ms")
+        return meta
 
     def get_point(
         self,
@@ -174,19 +107,34 @@ class INCOISHYCOMService:
         variable: str = "temperature",
         time_str: Optional[str] = None,
     ) -> OceanModelPoint:
-        """Extract value for a single point using nearest-neighbor indexing."""
-        ds, err = self.get_dataset()
-        if not ds:
-            raise ValueError(err or "HYCOM dataset unavailable")
+        """
+        Extract value for a single point across the best matching NetCDF file.
+        Uses nearest-neighbor coordinate slicing with query-level caching.
+        """
+        self.validate_coordinates(latitude, longitude, depth)
 
-        nc_var = self._var_mapping.get(variable, variable)
+        t0 = time.time()
+        cache_key = f"pt_{variable}_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{time_str or 'latest'}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Point query for {variable} at ({latitude}, {longitude}) in {(time.time() - t0)*1000:.2f}ms")
+            return cached
+
+        filepath, filename, sel_model_time, time_diff_hours, ds, var_mapping, dim_mapping = (
+            self.dataset_manager.select_file_for_time(time_str)
+        )
+
+        if ds is None or not filename:
+            raise ValueError("No valid HYCOM dataset available for point query.")
+
+        nc_var = var_mapping.get(variable, variable)
         if nc_var not in ds.data_vars:
-            raise ValueError(f"Variable '{variable}' (mapped as '{nc_var}') not found in HYCOM dataset.")
+            raise ValueError(f"Variable '{variable}' (mapped as '{nc_var}') not found in dataset '{filename}'.")
 
-        lat_dim = self._dim_mapping.get("latitude", "latitude")
-        lon_dim = self._dim_mapping.get("longitude", "longitude")
-        depth_dim = self._dim_mapping.get("depth", "depth")
-        time_dim = self._dim_mapping.get("time", "time")
+        lat_dim = dim_mapping.get("latitude", "latitude")
+        lon_dim = dim_mapping.get("longitude", "longitude")
+        depth_dim = dim_mapping.get("depth", "depth")
+        time_dim = dim_mapping.get("time", "time")
 
         selectors = {
             lat_dim: latitude,
@@ -194,11 +142,8 @@ class INCOISHYCOMService:
         }
         if depth_dim in ds[nc_var].dims:
             selectors[depth_dim] = depth
-        if time_dim in ds[nc_var].dims:
-            if time_str:
-                selectors[time_dim] = self._to_naive_datetime64(time_str)
-            else:
-                selectors[time_dim] = ds[time_dim].values[-1]
+        if time_dim in ds[nc_var].dims and sel_model_time:
+            selectors[time_dim] = self._to_naive_datetime64(sel_model_time)
 
         sliced = ds[nc_var].sel(selectors, method="nearest")
         val = float(np.ravel(sliced.values)[0])
@@ -206,27 +151,32 @@ class INCOISHYCOMService:
         actual_lat = float(sliced[lat_dim].values.item()) if lat_dim in sliced.coords else latitude
         actual_lon = float(sliced[lon_dim].values.item()) if lon_dim in sliced.coords else longitude
         actual_depth = float(sliced[depth_dim].values.item()) if depth_dim in sliced.coords else depth
-        
-        m_time = time_str or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        if time_dim in sliced.coords:
-            m_time = pd.to_datetime(sliced[time_dim].values.item()).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         unit = str(ds[nc_var].attrs.get("units", "degC" if variable == "temperature" else "PSU"))
 
-        return OceanModelPoint(
+        res = OceanModelPoint(
             source="INCOIS",
+            provider="INCOIS RSMC",
             model="HYCOM",
             dataset="INCOIS_RSMC_HYCOM",
             retrieved_at=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             latitude=actual_lat,
             longitude=actual_lon,
             depth=actual_depth,
-            time=time_str or m_time,
-            model_time=m_time,
+            time=time_str or sel_model_time or "latest",
+            model_time=sel_model_time or "latest",
             variable=variable,
-            value=round(val, 4),
+            value=round(val, 4) if not np.isnan(val) else 0.0,
             unit=unit,
+            selected_file=filename,
+            time_difference_hours=time_diff_hours,
         )
+        self.cache.set(cache_key, res, ttl=self.cache_ttl)
+        logger.info(
+            f"[CACHE MISS] Point query ({variable}) at ({latitude:.2f}, {longitude:.2f}, {depth}m) "
+            f"file={filename} dt={sel_model_time} in {(time.time() - t0)*1000:.2f}ms"
+        )
+        return res
 
     def get_profile(
         self,
@@ -234,46 +184,54 @@ class INCOISHYCOMService:
         longitude: float,
         time_str: Optional[str] = None,
     ) -> OceanModelProfile:
-        """Fetch vertical temperature & salinity profile for a location."""
-        ds, err = self.get_dataset()
-        if not ds:
-            raise ValueError(err or "HYCOM dataset unavailable")
+        """
+        Fetch vertical temperature, salinity, and velocity profile for a coordinate.
+        Intelligently selects the best NetCDF file matching requested timestamp.
+        """
+        self.validate_coordinates(latitude, longitude, 0.0)
 
-        lat_dim = self._dim_mapping.get("latitude", "latitude")
-        lon_dim = self._dim_mapping.get("longitude", "longitude")
-        depth_dim = self._dim_mapping.get("depth", "depth")
-        time_dim = self._dim_mapping.get("time", "time")
+        t0 = time.time()
+        cache_key = f"prof_{latitude:.3f}_{longitude:.3f}_{time_str or 'latest'}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Profile query at ({latitude}, {longitude}) in {(time.time() - t0)*1000:.2f}ms")
+            return cached
 
-        temp_var = self._var_mapping.get("temperature", "water_temp")
-        sal_var = self._var_mapping.get("salinity", "salinity")
-        u_var = self._var_mapping.get("current_u", "water_u")
-        v_var = self._var_mapping.get("current_v", "water_v")
+        filepath, filename, sel_model_time, time_diff_hours, ds, var_mapping, dim_mapping = (
+            self.dataset_manager.select_file_for_time(time_str)
+        )
+
+        if ds is None or not filename:
+            raise ValueError("No valid HYCOM dataset available for vertical profile query.")
+
+        lat_dim = dim_mapping.get("latitude", "latitude")
+        lon_dim = dim_mapping.get("longitude", "longitude")
+        depth_dim = dim_mapping.get("depth", "depth")
+        time_dim = dim_mapping.get("time", "time")
+
+        temp_var = var_mapping.get("temperature", "water_temp")
+        sal_var = var_mapping.get("salinity", "salinity")
+        u_var = var_mapping.get("current_u", "water_u")
+        v_var = var_mapping.get("current_v", "water_v")
 
         selectors = {
             lat_dim: latitude,
             lon_dim: longitude,
         }
-        if time_dim in ds.dims:
-            if time_str:
-                selectors[time_dim] = self._to_naive_datetime64(time_str)
-            else:
-                selectors[time_dim] = ds[time_dim].values[-1]
+        if time_dim in ds.dims and sel_model_time:
+            selectors[time_dim] = self._to_naive_datetime64(sel_model_time)
 
         sliced_ds = ds.sel(selectors, method="nearest")
 
         actual_lat = float(sliced_ds[lat_dim].values.item()) if lat_dim in sliced_ds.coords else latitude
         actual_lon = float(sliced_ds[lon_dim].values.item()) if lon_dim in sliced_ds.coords else longitude
-        
-        m_time = time_str or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        if time_dim in sliced_ds.coords:
-            m_time = pd.to_datetime(sliced_ds[time_dim].values.item()).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        depth_levels = sliced_ds[depth_dim].values if depth_dim in sliced_ds else np.array([0.0])
-        
-        temps = sliced_ds[temp_var].values if temp_var in sliced_ds else np.zeros_like(depth_levels)
-        sals = sliced_ds[sal_var].values if sal_var in sliced_ds else np.zeros_like(depth_levels)
-        us = sliced_ds[u_var].values if u_var in sliced_ds else np.zeros_like(depth_levels)
-        vs = sliced_ds[v_var].values if v_var in sliced_ds else np.zeros_like(depth_levels)
+        depth_levels = sliced_ds[depth_dim].values if (depth_dim and depth_dim in sliced_ds) else np.array([0.0])
+
+        temps = sliced_ds[temp_var].values if (temp_var and temp_var in sliced_ds) else np.zeros_like(depth_levels)
+        sals = sliced_ds[sal_var].values if (sal_var and sal_var in sliced_ds) else np.zeros_like(depth_levels)
+        us = sliced_ds[u_var].values if (u_var and u_var in sliced_ds) else np.zeros_like(depth_levels)
+        vs = sliced_ds[v_var].values if (v_var and v_var in sliced_ds) else np.zeros_like(depth_levels)
 
         profile_levels: List[OceanModelProfileLevel] = []
         for i, z in enumerate(depth_levels):
@@ -287,17 +245,26 @@ class INCOISHYCOMService:
                 )
             )
 
-        return OceanModelProfile(
+        res = OceanModelProfile(
             source="INCOIS",
+            provider="INCOIS RSMC",
             model="HYCOM",
             dataset="INCOIS_RSMC_HYCOM",
             retrieved_at=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             latitude=actual_lat,
             longitude=actual_lon,
-            time=time_str or m_time,
-            model_time=m_time,
+            time=time_str or sel_model_time or "latest",
+            model_time=sel_model_time or "latest",
             profile=profile_levels,
+            selected_file=filename,
+            time_difference_hours=time_diff_hours,
         )
+        self.cache.set(cache_key, res, ttl=self.cache_ttl)
+        logger.info(
+            f"[CACHE MISS] Profile query at ({latitude:.2f}, {longitude:.2f}) "
+            f"file={filename} dt={sel_model_time} in {(time.time() - t0)*1000:.2f}ms"
+        )
+        return res
 
     def get_current(
         self,
@@ -306,30 +273,45 @@ class INCOISHYCOMService:
         depth: float = 0.0,
         time_str: Optional[str] = None,
     ) -> OceanModelCurrent:
-        """Extract u and v velocity components and compute speed and oceanographic direction."""
-        ds, err = self.get_dataset()
-        if not ds:
-            raise ValueError(err or "HYCOM dataset unavailable")
+        """
+        Extract vector current components (u, v), calculate speed magnitude sqrt(u^2 + v^2)
+        and ocean current heading direction in meteorological degrees.
+        """
+        self.validate_coordinates(latitude, longitude, depth)
 
-        lat_dim = self._dim_mapping.get("latitude", "latitude")
-        lon_dim = self._dim_mapping.get("longitude", "longitude")
-        depth_dim = self._dim_mapping.get("depth", "depth")
-        time_dim = self._dim_mapping.get("time", "time")
+        t0 = time.time()
+        cache_key = f"curr_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{time_str or 'latest'}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Current query at ({latitude}, {longitude}) in {(time.time() - t0)*1000:.2f}ms")
+            return cached
 
-        u_var = self._var_mapping.get("current_u", "water_u")
-        v_var = self._var_mapping.get("current_v", "water_v")
+        filepath, filename, sel_model_time, time_diff_hours, ds, var_mapping, dim_mapping = (
+            self.dataset_manager.select_file_for_time(time_str)
+        )
+
+        if ds is None or not filename:
+            raise ValueError("No valid HYCOM dataset available for current velocity query.")
+
+        u_var = var_mapping.get("current_u")
+        v_var = var_mapping.get("current_v")
+
+        if not u_var or not v_var or u_var not in ds.data_vars or v_var not in ds.data_vars:
+            raise ValueError(f"Current velocity variables ({u_var}, {v_var}) not present in dataset '{filename}'.")
+
+        lat_dim = dim_mapping.get("latitude", "latitude")
+        lon_dim = dim_mapping.get("longitude", "longitude")
+        depth_dim = dim_mapping.get("depth", "depth")
+        time_dim = dim_mapping.get("time", "time")
 
         selectors = {
             lat_dim: latitude,
             lon_dim: longitude,
         }
-        if depth_dim in ds.dims:
+        if depth_dim in ds[u_var].dims:
             selectors[depth_dim] = depth
-        if time_dim in ds.dims:
-            if time_str:
-                selectors[time_dim] = self._to_naive_datetime64(time_str)
-            else:
-                selectors[time_dim] = ds[time_dim].values[-1]
+        if time_dim in ds[u_var].dims and sel_model_time:
+            selectors[time_dim] = self._to_naive_datetime64(sel_model_time)
 
         sliced_u = ds[u_var].sel(selectors, method="nearest")
         sliced_v = ds[v_var].sel(selectors, method="nearest")
@@ -337,44 +319,85 @@ class INCOISHYCOMService:
         u_val = float(np.ravel(sliced_u.values)[0])
         v_val = float(np.ravel(sliced_v.values)[0])
 
-        speed = math.sqrt(u_val**2 + v_val**2)
-        # Direction in degrees from North (0° = North, 90° = East)
+        speed = math.sqrt(u_val**2 + v_val**2) if (not np.isnan(u_val) and not np.isnan(v_val)) else 0.0
+        # Direction: angle of current flow towards (0 = North, 90 = East)
         direction_rad = math.atan2(u_val, v_val)
         direction_deg = (math.degrees(direction_rad) + 360.0) % 360.0
 
         actual_lat = float(sliced_u[lat_dim].values.item()) if lat_dim in sliced_u.coords else latitude
         actual_lon = float(sliced_u[lon_dim].values.item()) if lon_dim in sliced_u.coords else longitude
-        actual_depth = float(sliced_u[depth_dim].values.item()) if depth_dim in sliced_u.coords else depth
 
-        m_time = time_str or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        if time_dim in sliced_u.coords:
-            m_time = pd.to_datetime(sliced_u[time_dim].values.item()).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        return OceanModelCurrent(
+        res = OceanModelCurrent(
             source="INCOIS",
+            provider="INCOIS RSMC",
             model="HYCOM",
             dataset="INCOIS_RSMC_HYCOM",
             retrieved_at=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             latitude=actual_lat,
             longitude=actual_lon,
-            depth=actual_depth,
-            time=time_str or m_time,
-            model_time=m_time,
+            depth=depth,
+            time=time_str or sel_model_time or "latest",
+            model_time=sel_model_time or "latest",
             u=round(u_val, 4),
             v=round(v_val, 4),
             speed=round(speed, 4),
             direction=round(direction_deg, 2),
             unit="m/s",
+            selected_file=filename,
+            time_difference_hours=time_diff_hours,
         )
+        self.cache.set(cache_key, res, ttl=self.cache_ttl)
+        logger.info(
+            f"[CACHE MISS] Current query at ({latitude:.2f}, {longitude:.2f}, {depth}m) "
+            f"speed={speed:.2f}m/s dir={direction_deg:.1f}° in {(time.time() - t0)*1000:.2f}ms"
+        )
+        return res
 
+    def get_timeseries(
+        self,
+        latitude: float,
+        longitude: float,
+        depth: float = 0.0,
+        variable: str = "temperature",
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> OceanModelTimeseriesResponse:
+        """
+        Extract time-series across all available HYCOM NetCDF files with caching.
+        """
+        self.validate_coordinates(latitude, longitude, depth)
+        self.validate_timeseries_bounds(start_time, end_time)
+
+        t0 = time.time()
+        cache_key = f"ts_{variable}_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{start_time or 'min'}_{end_time or 'max'}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Timeseries query for {variable} in {(time.time() - t0)*1000:.2f}ms")
+            return cached
+
+        res = self.dataset_manager.get_timeseries(
+            latitude=latitude,
+            longitude=longitude,
+            depth=depth,
+            variable=variable,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        self.cache.set(cache_key, res, ttl=self.cache_ttl)
+        logger.info(
+            f"[CACHE MISS] Timeseries query ({variable}) points={res.count} in {(time.time() - t0)*1000:.2f}ms"
+        )
+        return res
 
     @staticmethod
     def calculate_haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate spatial distance between two geographic coordinates in kilometers."""
-        r = 6371.0  # Earth's mean radius in km
-        dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat / 2.0) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+        """Calculate great circle distance between two points in km."""
+        r = 6371.0
+        p1 = math.radians(lat1)
+        p2 = math.radians(lat2)
+        dp = math.radians(lat2 - lat1)
+        dl = math.radians(lon2 - lon1)
+        a = math.sin(dp / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2.0) ** 2
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
         return round(r * c, 2)
 
@@ -387,7 +410,19 @@ class INCOISHYCOMService:
         obs_time: str,
         argo_levels: List[Dict[str, Any]],
     ) -> ModelObservationComparisonResponse:
-        """Compare real INCOIS Argo profile with corresponding nearest INCOIS HYCOM model outputs."""
+        """
+        Compare real INCOIS Argo profile with the nearest matching INCOIS HYCOM NetCDF file and model timestep.
+        Computes spatial distance, time offset, and statistical metrics (Bias, RMSE, MAE).
+        """
+        self.validate_coordinates(obs_lat, obs_lon, 0.0)
+
+        t0 = time.time()
+        cache_key = f"comp_argo_{platform_number}_{cycle_number}_{obs_time}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug(f"[CACHE HIT] Argo comparison for float {platform_number} in {(time.time() - t0)*1000:.2f}ms")
+            return cached
+
         hycom_prof = self.get_profile(latitude=obs_lat, longitude=obs_lon, time_str=obs_time)
         
         distance_km = self.calculate_haversine_km(obs_lat, obs_lon, hycom_prof.latitude, hycom_prof.longitude)
@@ -397,57 +432,77 @@ class INCOISHYCOMService:
         t_model = pd.to_datetime(hycom_prof.model_time)
         time_diff_hours = round(abs((t_model - t_obs).total_seconds()) / 3600.0, 2)
 
-        # Map model profile levels by depth for quick depth interpolation / lookup
+        # Map model profile levels by depth for quick depth lookup
         model_by_depth = {p.depth: p for p in hycom_prof.profile}
         model_depths = np.array(list(model_by_depth.keys()))
 
         items: List[ModelObservationComparisonItem] = []
         temp_diffs: List[float] = []
         sal_diffs: List[float] = []
+        qc_pass_count = 0
+        qc_fail_count = 0
+        valid_pairs_count = 0
+        missing_count = 0
 
         for lvl in argo_levels:
-            pressure_depth = float(lvl.get("pressure", 0.0)) # Approx 1 dbar ~ 1 meter depth
-            obs_temp = lvl.get("temperature")
-            obs_sal = lvl.get("salinity")
+            raw_pres = lvl.get("pressure", 0.0)
+            if is_fill_value(raw_pres):
+                missing_count += 1
+                continue
 
-            # Nearest model depth match
-            idx = (np.abs(model_depths - pressure_depth)).argmin()
-            matched_depth = model_depths[idx]
-            m_level = model_by_depth[matched_depth]
+            pressure_depth = round(float(raw_pres), 1)
+            raw_obs_temp = lvl.get("temperature")
+            raw_obs_sal = lvl.get("salinity")
 
-            mod_temp = m_level.temperature
-            mod_sal = m_level.salinity
+            clean_obs_temp, temp_qc = validate_temperature(raw_obs_temp)
+            clean_obs_sal, sal_qc = validate_salinity(raw_obs_sal)
 
-            t_diff = round(mod_temp - obs_temp, 3) if (mod_temp is not None and obs_temp is not None) else None
-            s_diff = round(mod_sal - obs_sal, 3) if (mod_sal is not None and obs_sal is not None) else None
+            # Match nearest model depth
+            mod_temp, mod_sal = None, None
+            if len(model_depths) > 0:
+                idx = (np.abs(model_depths - pressure_depth)).argmin()
+                matched_depth = model_depths[idx]
+                m_level = model_by_depth[matched_depth]
+                mod_temp, _ = validate_temperature(m_level.temperature)
+                mod_sal, _ = validate_salinity(m_level.salinity)
+
+            is_valid_temp = (clean_obs_temp is not None and mod_temp is not None)
+            is_valid_sal = (clean_obs_sal is not None and mod_sal is not None)
+            is_valid_pair = is_valid_temp or is_valid_sal
+
+            t_diff = round(mod_temp - clean_obs_temp, 3) if is_valid_temp else None
+            s_diff = round(mod_sal - clean_obs_sal, 3) if is_valid_sal else None
 
             if t_diff is not None:
                 temp_diffs.append(t_diff)
             if s_diff is not None:
                 sal_diffs.append(s_diff)
 
+            if is_valid_pair:
+                valid_pairs_count += 1
+                qc_pass_count += 1
+            else:
+                qc_fail_count += 1
+
             items.append(
                 ModelObservationComparisonItem(
-                    depth=round(pressure_depth, 1),
+                    depth=pressure_depth,
                     model_temperature=mod_temp,
-                    observed_temperature=obs_temp,
+                    observed_temperature=clean_obs_temp,
                     temperature_difference=t_diff,
                     model_salinity=mod_sal,
-                    observed_salinity=obs_sal,
+                    observed_salinity=clean_obs_sal,
                     salinity_difference=s_diff,
+                    qc_status="PASSED" if is_valid_pair else "FLAGGED",
+                    is_valid_pair=is_valid_pair,
                 )
             )
 
-        # Statistical Metrics Calculation
-        temp_bias = round(float(np.mean(temp_diffs)), 4) if temp_diffs else None
-        temp_rmse = round(float(np.sqrt(np.mean(np.square(temp_diffs)))), 4) if temp_diffs else None
-        temp_mae = round(float(np.mean(np.abs(temp_diffs))), 4) if temp_diffs else None
+        # Statistical Metrics Calculation using only valid non-NaN pairs
+        temp_bias, temp_rmse, temp_mae = compute_metrics(temp_diffs)
+        sal_bias, sal_rmse, sal_mae = compute_metrics(sal_diffs)
 
-        sal_bias = round(float(np.mean(sal_diffs)), 4) if sal_diffs else None
-        sal_rmse = round(float(np.sqrt(np.mean(np.square(sal_diffs)))), 4) if sal_diffs else None
-        sal_mae = round(float(np.mean(np.abs(sal_diffs))), 4) if sal_diffs else None
-
-        return ModelObservationComparisonResponse(
+        res = ModelObservationComparisonResponse(
             source_model="INCOIS HYCOM",
             source_observation="INCOIS Argo",
             platform_number=platform_number,
@@ -460,6 +515,12 @@ class INCOISHYCOMService:
             observation_time=obs_time,
             model_time=hycom_prof.model_time,
             time_difference_hours=time_diff_hours,
+            selected_file=hycom_prof.selected_file,
+            matched_depth_count=len(items),
+            valid_pairs_count=valid_pairs_count,
+            missing_count=missing_count,
+            qc_pass_count=qc_pass_count,
+            qc_fail_count=qc_fail_count,
             temp_bias=temp_bias,
             temp_rmse=temp_rmse,
             temp_mae=temp_mae,
@@ -468,6 +529,13 @@ class INCOISHYCOMService:
             sal_mae=sal_mae,
             profile_comparison=items,
         )
+        self.cache.set(cache_key, res, ttl=self.cache_ttl)
+        logger.info(
+            f"[CACHE MISS] Argo comparison float={platform_number} cyc={cycle_number} "
+            f"dist={distance_km}km valid_pairs={valid_pairs_count} in {(time.time() - t0)*1000:.2f}ms"
+        )
+        return res
 
 
+# Singleton HYCOM Service Instance
 hycom_service = INCOISHYCOMService()

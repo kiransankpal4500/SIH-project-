@@ -1,102 +1,111 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Waves, Globe, LayoutDashboard, Compass, BarChart2, ShieldAlert, Database, ArrowRight } from 'lucide-react';
+import { Waves, Globe, LayoutDashboard, Compass, BarChart2, ShieldAlert, Database, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
 import { APP_CONFIG } from '../../config/appConfig';
 
 export const HomePage: React.FC = () => {
   const capabilities = [
     {
-      title: '3D Globe Visualization',
-      description: 'Render numerical ocean model output fields and in-situ floats on an interactive 3D WebGL sphere.',
+      title: '3D Ocean GIS Viewport',
+      description: 'Render numerical ocean forecast models (HYCOM) and in-situ Argo array floats across realistic Earth geography.',
       icon: Globe,
       link: '/explorer',
+      badge: '4D TIME & DEPTH',
     },
     {
-      title: 'Scientific Dashboard',
-      description: 'Monitor real-time ocean system metrics, active sensors, and environmental parameter trends.',
+      title: 'Operational Telemetry',
+      description: 'Monitor real-time system indicators, active observation feeds, SST departures, and dynamic sea surface heights.',
       icon: LayoutDashboard,
       link: '/dashboard',
+      badge: 'INCOIS ERDDAP',
     },
     {
-      title: 'In-Situ Observations',
-      description: 'Ingest Argo floats, moored buoys, CTD casts, and surface drifters across global basins.',
+      title: 'In-Situ Observation Array',
+      description: 'Direct ingestion of Indian Ocean Argo float CTD vertical profiles with IOC/WMO data quality validation.',
       icon: Compass,
       link: '/observations',
+      badge: 'QC VALIDATED',
     },
     {
-      title: 'Depth & Time Analytics',
-      description: 'Inspect vertical depth profiles (0-2000m) and analyze model vs observation deltas.',
+      title: 'Model Cross-Validation',
+      description: 'Statistical error analysis comparing numerical HYCOM model outputs against in-situ observations (Bias, RMSE, MAE).',
       icon: BarChart2,
       link: '/analytics',
+      badge: 'SPATIAL CO-LOCATION',
     },
   ];
 
   return (
-    <div className="space-y-8 py-4">
-      {/* Hero Banner */}
-      <div className="relative rounded-xl bg-gradient-to-br from-ocean-900 via-ocean-850 to-ocean-950 border border-ocean-800 p-6 md:p-10 overflow-hidden shadow-xl">
-        <div className="absolute -right-12 -bottom-12 w-96 h-96 bg-ocean-400/5 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="relative z-10 max-w-3xl space-y-4">
+    <div className="space-y-6 py-2">
+      {/* Mission Overview Hero Strip */}
+      <div className="rounded bg-[#0b1220] border border-slate-800 p-6 md:p-8 relative overflow-hidden">
+        <div className="max-w-3xl space-y-3 relative z-10">
           <div className="flex items-center space-x-2">
-            <Badge variant="cyan">HACKATHON PROJECT FOUNDATION</Badge>
-            <Badge variant="emerald">STAGE: SHELL & ARCHITECTURE</Badge>
+            <span className="text-[10px] font-mono px-2 py-0.5 bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 rounded font-semibold">
+              OPERATIONAL OCEANOGRAPHY GIS
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 rounded font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              INCOIS LIVE CONNECTED
+            </span>
           </div>
 
-          <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            {APP_CONFIG.name}
+          <h1 className="text-2xl md:text-4xl font-bold text-white tracking-tight font-sans">
+            {APP_CONFIG.name} — Oceanographic Telemetry & Forecast Validation
           </h1>
-          <p className="text-lg md:text-xl font-mono text-ocean-300 font-medium">
-            "{APP_CONFIG.tagline}"
+
+          <p className="text-sm text-slate-300 leading-relaxed font-sans">
+            A unified scientific visualization and decision-support platform bridging <strong>in-situ ocean observations</strong> (INCOIS Argo floats and CTD profiling arrays) with <strong>operational numerical ocean models</strong> (INCOIS RSMC HYCOM NetCDF forecasts).
           </p>
 
-          <p className="text-sm md:text-base text-slate-300 leading-relaxed font-sans">
-            A web-based scientific visualization platform integrating <strong>numerical ocean model outputs</strong> (HYCOM, Copernicus) and <strong>in-situ ocean observations</strong> (INCOIS, Argo array).
-          </p>
-
-          <div className="pt-4 flex flex-wrap items-center gap-3">
-            <NavLink to="/dashboard">
-              <Button variant="primary" size="lg">
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Launch Dashboard</span>
-              </Button>
-            </NavLink>
+          <div className="pt-2 flex flex-wrap items-center gap-3 font-mono text-xs">
             <NavLink to="/explorer">
-              <Button variant="outline" size="lg">
-                <Globe className="w-4 h-4 text-ocean-400" />
-                <span>Open 3D Explorer</span>
-              </Button>
+              <button className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded flex items-center gap-2 transition-all">
+                <Globe className="w-4 h-4" />
+                <span>Launch 3D Explorer</span>
+              </button>
+            </NavLink>
+            <NavLink to="/analytics">
+              <button className="px-4 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded flex items-center gap-2 transition-all">
+                <BarChart2 className="w-4 h-4 text-cyan-400" />
+                <span>Inspect Model vs. Observation</span>
+              </button>
             </NavLink>
           </div>
         </div>
       </div>
 
-      {/* Feature Capabilities Grid */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <Waves className="w-5 h-5 text-ocean-400" />
-          Platform Modules
-        </h2>
+      {/* Scientific Modules Grid */}
+      <div className="space-y-3">
+        <div className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <Waves className="w-4 h-4 text-cyan-400" />
+          <span>Core Analytical Modules</span>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {capabilities.map((item, index) => {
             const Icon = item.icon;
             return (
               <NavLink key={index} to={item.link} className="group">
-                <div className="bg-ocean-900 border border-ocean-800 group-hover:border-ocean-400/60 rounded-lg p-5 h-full flex flex-col justify-between transition-all duration-300 shadow-md">
+                <div className="bg-[#0b1220] border border-slate-800 group-hover:border-slate-700 rounded p-4 h-full flex flex-col justify-between transition-all">
                   <div>
-                    <div className="w-10 h-10 rounded-lg bg-ocean-850 border border-ocean-700/60 text-ocean-400 flex items-center justify-center mb-3 group-hover:bg-ocean-400/10 group-hover:text-ocean-300 transition-colors">
-                      <Icon className="w-5 h-5" />
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="p-2 bg-slate-900 border border-slate-800 text-cyan-400 rounded group-hover:text-cyan-300">
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className="text-[9px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 border border-slate-800 rounded">
+                        {item.badge}
+                      </span>
                     </div>
-                    <h3 className="text-base font-semibold text-white mb-1.5">{item.title}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
+
+                    <h3 className="text-sm font-semibold text-slate-100 mb-1 font-sans">{item.title}</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed font-sans">{item.description}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center text-xs font-mono text-ocean-400 font-semibold group-hover:translate-x-1 transition-transform">
-                    <span>Explore Module</span>
-                    <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  <div className="mt-4 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-cyan-400 font-semibold group-hover:text-cyan-300">
+                    <span>Open Module</span>
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>
               </NavLink>
@@ -105,20 +114,30 @@ export const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Data Ingestion Sources */}
-      <div className="bg-ocean-900 border border-ocean-800 rounded-lg p-5 space-y-3">
-        <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <Database className="w-4 h-4 text-ocean-400" />
-          Integrated Oceanographic Datasets
-        </h3>
+      {/* Integrated Data Ingestion Feeds */}
+      <div className="bg-[#0b1220] border border-slate-800 rounded p-4 space-y-2.5">
+        <div className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <Database className="w-4 h-4 text-cyan-400" />
+          <span>Verified Operational Data Ingestion Feeds</span>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
-          {APP_CONFIG.dataSources.map((ds) => (
-            <div key={ds.id} className="bg-ocean-850 border border-ocean-800 rounded p-3 text-slate-300">
-              <span className="text-ocean-400 font-bold block mb-0.5">{ds.id}</span>
-              <span className="text-[11px] text-slate-400">{ds.name}</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs font-mono">
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-0.5">
+            <span className="text-emerald-400 font-bold block text-xs">INCOIS ERDDAP</span>
+            <span className="text-[11px] text-slate-400">Indian_ARGO_Floats live telemetry array</span>
+          </div>
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-0.5">
+            <span className="text-cyan-400 font-bold block text-xs">INCOIS RSMC HYCOM</span>
+            <span className="text-[11px] text-slate-400">0.08° multi-variable NetCDF numerical grids</span>
+          </div>
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-0.5">
+            <span className="text-slate-200 font-bold block text-xs">SCIENTIFIC QC ENGINE</span>
+            <span className="text-[11px] text-slate-400">IOC/WMO physical limits & fill value filtering</span>
+          </div>
+          <div className="bg-slate-900/90 border border-slate-800 rounded p-2.5 space-y-0.5">
+            <span className="text-amber-300 font-bold block text-xs">DECISION-SUPPORT</span>
+            <span className="text-[11px] text-slate-400">Transparent rule-based ocean hazard engine</span>
+          </div>
         </div>
       </div>
     </div>

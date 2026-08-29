@@ -21,36 +21,36 @@ def run_tests():
     print(f"Depth Levels ({len(meta.depth_levels)}): {meta.depth_levels[:5]}...")
     assert meta.is_available, "HYCOM NetCDF dataset should be available"
 
-    # 2. Test Point Query
-    point = hycom_service.get_point(latitude=12.5, longitude=75.0, depth=10.0, variable="temperature")
-    print(f"Point Query Temp at (12.5, 75.0, 10m): {point.value} {point.unit} (Model Time: {point.model_time})")
+    # 2. Test Point Query (Bay of Bengal ocean coordinate)
+    point = hycom_service.get_point(latitude=13.75, longitude=87.30, depth=10.0, variable="temperature")
+    print(f"Point Query Temp at (13.75°N, 87.30°E, 10m): {point.value} {point.unit} (Model Time: {point.model_time})")
     assert point.value > 0.0, "Point temperature value should be positive"
 
     # 3. Test Profile Query
-    profile = hycom_service.get_profile(latitude=12.5, longitude=75.0)
+    profile = hycom_service.get_profile(latitude=13.75, longitude=87.30)
     print(f"Profile Query Levels Count: {len(profile.profile)}")
     print(f"  Level 0m -> Temp: {profile.profile[0].temperature}°C, Sal: {profile.profile[0].salinity} PSU")
-    print(f"  Level 100m -> Temp: {profile.profile[5].temperature}°C, Sal: {profile.profile[5].salinity} PSU")
+    print(f"  Level 100m -> Temp: {profile.profile[3].temperature}°C, Sal: {profile.profile[3].salinity} PSU")
     assert len(profile.profile) > 0, "Profile should have levels"
 
     # 4. Test Current Query
-    current = hycom_service.get_current(latitude=12.5, longitude=75.0, depth=0.0)
+    current = hycom_service.get_current(latitude=13.75, longitude=87.30, depth=0.0)
     print(f"Current Vector at Surface: u={current.u} m/s, v={current.v} m/s, speed={current.speed} m/s, direction={current.direction}°")
     assert current.speed >= 0.0, "Speed should be non-negative"
 
     # 5. Test Comparison Logic
     sample_argo_levels = [
-        {"pressure": 0.0, "temperature": 28.4, "salinity": 35.1},
-        {"pressure": 10.0, "temperature": 28.2, "salinity": 35.1},
-        {"pressure": 50.0, "temperature": 25.6, "salinity": 35.3},
-        {"pressure": 100.0, "temperature": 21.3, "salinity": 35.5},
+        {"pressure": 0.3, "temperature": 27.83, "salinity": 33.001},
+        {"pressure": 10.0, "temperature": 27.82, "salinity": 33.012},
+        {"pressure": 50.0, "temperature": 26.50, "salinity": 33.500},
+        {"pressure": 100.0, "temperature": 22.10, "salinity": 34.200},
     ]
     comp = hycom_service.compare_with_argo_profile(
-        platform_number="2901452",
-        cycle_number=1,
-        obs_lat=12.52,
-        obs_lon=75.04,
-        obs_time="2026-08-27T00:00:00Z",
+        platform_number="1902669",
+        cycle_number=49,
+        obs_lat=13.75,
+        obs_lon=87.30,
+        obs_time="2025-01-11T14:09:21Z",
         argo_levels=sample_argo_levels,
     )
     print("=== Model vs Observation Comparison Results ===")

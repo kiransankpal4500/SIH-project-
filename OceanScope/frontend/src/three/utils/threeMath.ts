@@ -31,3 +31,31 @@ export function latLonToVector3(
 
   return new THREE.Vector3(x, y, z);
 }
+
+/**
+ * Convert 3D Cartesian coordinates on sphere back to geographical latitude and longitude
+ */
+export function vector3ToLatLon(
+  vec: THREE.Vector3,
+  globeRadius = GLOBE_RADIUS
+): { lat: number; lon: number } {
+  const norm = vec.clone().normalize();
+  // y = radius * cos(phi) => phi = acos(clamp(y, -1, 1))
+  const phi = Math.acos(Math.max(-1, Math.min(1, norm.y)));
+  const lat = 90 - (phi * 180) / Math.PI;
+
+  // x = -(sin(phi) * cos(theta)), z = sin(phi) * sin(theta)
+  // theta = atan2(z, -x)
+  let theta = Math.atan2(norm.z, -norm.x);
+  let lon = (theta * 180) / Math.PI - 180;
+
+  // Normalize lon to [-180, 180]
+  while (lon < -180) lon += 360;
+  while (lon > 180) lon -= 360;
+
+  return {
+    lat: Math.round(lat * 100) / 100,
+    lon: Math.round(lon * 100) / 100,
+  };
+}
+

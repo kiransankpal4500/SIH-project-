@@ -21,7 +21,64 @@ export type DataSource = 'INCOIS' | 'ARGO' | 'HYCOM' | 'COPERNICUS';
 /**
  * Risk / Alert Severity Levels
  */
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type RiskLevel = 'LOW' | 'MODERATE' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+/**
+ * Risk Factor Breakdown Detail
+ */
+export interface RiskFactorDetail {
+  name: string;
+  variable_key: string;
+  value: number | null;
+  unit: string;
+  risk_level: RiskLevel;
+  threshold_used: string;
+  is_available: boolean;
+  description?: string;
+}
+
+/**
+ * Location-based Risk Assessment Response
+ */
+export interface LocationRiskResponse {
+  latitude: number;
+  longitude: number;
+  depth: number;
+  timestamp: string;
+  overall_risk: RiskLevel;
+  contributing_parameter: string;
+  primary_factor_value: number | null;
+  primary_factor_unit?: string;
+  primary_threshold: string;
+  why_reason: string;
+  source: string;
+  is_live_data: boolean;
+  factors: RiskFactorDetail[];
+  disclaimer: string;
+}
+
+/**
+ * Regional Risk Alert Hotspot
+ */
+export interface RegionalRiskHotspot {
+  id: string;
+  title: string;
+  category: string;
+  risk_level: RiskLevel;
+  latitude: number;
+  longitude: number;
+  region_name: string;
+  affected_area_km2: number;
+  detected_at: string;
+  contributing_parameter: string;
+  actual_value: number;
+  unit: string;
+  threshold_used: string;
+  source: string;
+  why_reason: string;
+  is_live_data: boolean;
+}
+
 
 /**
  * Geographical ocean location point

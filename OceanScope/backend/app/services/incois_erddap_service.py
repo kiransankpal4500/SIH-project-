@@ -1,6 +1,7 @@
 """
 INCOIS ERDDAP Machine-Readable Data Access Provider
 Queries https://erddap.incois.gov.in/erddap/tabledap/Indian_ARGO_Floats.json
+Performs automated Quality Control (QC) filtering and physical range validation.
 """
 
 import json
@@ -10,6 +11,7 @@ import ssl
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from app.core.config import settings
+from app.core.quality_control import validate_temperature, validate_salinity, is_fill_value
 from app.schemas.ocean_schemas import (
     ArgoObservationItem,
     ArgoObservationResponse,
@@ -51,7 +53,7 @@ class INCOISErddapProvider(OceanDataProvider):
         limit: int = 100,
     ) -> ArgoObservationResponse:
         """
-        Retrieves real INCOIS Argo Float surface/near-surface observations constrained spatially
+        Retrieves real INCOIS Argo Float surface observations with scientific QC filtering.
         """
         fields = "PLATFORM_NUMBER,CYCLE_NUMBER,latitude,longitude,time,PRES,TEMP,PSAL"
         constraints = [
@@ -59,42 +61,48 @@ class INCOISErddapProvider(OceanDataProvider):
             f"latitude<={max_lat}",
             f"longitude>={min_lon}",
             f"longitude<={max_lon}",
-            "PRES<=15", # Surface / upper layer focus for 3D globe markers
+            "PRES<=15",  # Surface / upper layer focus
         ]
 
         if platform_number:
             constraints.append(f'PLATFORM_NUMBER="{platform_number}"')
 
         encoded_query = f"{fields}&" + "&".join(
-            [urllib.parse.quote(c, safe='="') for c in constraints]
+            [urllib.parse.quote(c, safe='=') for c in constraints]
         )
         endpoint = f"{self.base_url}/tabledap/{self.dataset_id}.json?{encoded_query}"
 
         raw_data = self._fetch_erddap_json(endpoint)
         rows = raw_data.get("table", {}).get("rows", [])
 
-        # Deduplicate to find latest distinct platform cycles
         seen_platforms: Dict[str, ArgoObservationItem] = {}
+        qc_pass_count = 0
+        qc_fail_count = 0
+
         for row in rows:
             p_num, cycle, lat, lon, time_str, pres, temp, psal = row
 
-            # Filter obvious fill / invalid sentinel values (-999, 99999, None)
-            if temp is not None and (temp < -2.0 or temp > 40.0):
-                continue
-            if psal is not None and (psal < 10.0 or psal > 45.0):
+            cleaned_temp, temp_status = validate_temperature(temp)
+            cleaned_saln, saln_status = validate_salinity(psal)
+
+            # Skip if both critical variables fail physical range
+            if temp_status == "REJECTED" and saln_status == "REJECTED":
+                qc_fail_count += 1
                 continue
 
+            qc_pass_count += 1
             item = ArgoObservationItem(
                 platform_number=str(p_num),
                 cycle_number=int(cycle),
                 latitude=float(lat),
                 longitude=float(lon),
                 timestamp=str(time_str),
-                pressure=float(pres) if pres is not None else None,
-                temperature=float(temp) if temp is not None else None,
-                salinity=float(psal) if psal is not None else None,
+                pressure=float(pres) if not is_fill_value(pres) else None,
+                temperature=cleaned_temp,
+                salinity=cleaned_saln,
+                qc_flag=1 if (temp_status == "PASSED" and saln_status == "PASSED") else 2,
+                qc_status="PASSED" if (temp_status == "PASSED" and saln_status == "PASSED") else "FLAGGED",
             )
-            # Store or update float item
             seen_platforms[str(p_num)] = item
             if len(seen_platforms) >= limit:
                 break
@@ -108,6 +116,10 @@ class INCOISErddapProvider(OceanDataProvider):
             data_time_range="Indian Ocean ARGO Array Operational Series",
             is_live_data=True,
             count=len(obs_list),
+            valid_count=len(obs_list),
+            missing_count=qc_fail_count,
+            qc_pass_count=qc_pass_count,
+            qc_fail_count=qc_fail_count,
             observations=obs_list,
         )
 
@@ -115,7 +127,7 @@ class INCOISErddapProvider(OceanDataProvider):
         self, platform_number: str, cycle_number: int
     ) -> ArgoProfileResponse:
         """
-        Retrieves real vertical depth/pressure profile for a float platform and cycle
+        Retrieves real vertical depth/pressure profile for a float platform and cycle with QC validation.
         """
         fields = "PLATFORM_NUMBER,CYCLE_NUMBER,latitude,longitude,time,PRES,TEMP,PSAL"
         constraints = [
@@ -124,7 +136,7 @@ class INCOISErddapProvider(OceanDataProvider):
         ]
 
         encoded_query = f"{fields}&" + "&".join(
-            [urllib.parse.quote(c, safe='="') for c in constraints]
+            [urllib.parse.quote(c, safe='=') for c in constraints]
         )
         endpoint = f"{self.base_url}/tabledap/{self.dataset_id}.json?{encoded_query}"
 
@@ -133,21 +145,33 @@ class INCOISErddapProvider(OceanDataProvider):
 
         profile_levels: List[ArgoProfileLevelItem] = []
         lat, lon, time_str = None, None, None
+        qc_pass_count = 0
+        qc_fail_count = 0
 
         for row in rows:
             p_num, cycle, row_lat, row_lon, r_time, pres, temp, psal = row
             if lat is None:
                 lat, lon, time_str = row_lat, row_lon, r_time
 
-            # Skip invalid level readings
-            if pres is None or (temp is not None and (temp < -2.0 or temp > 40.0)):
+            if is_fill_value(pres):
+                qc_fail_count += 1
                 continue
 
+            cleaned_temp, temp_status = validate_temperature(temp)
+            cleaned_saln, saln_status = validate_salinity(psal)
+
+            if temp_status == "REJECTED" and saln_status == "REJECTED":
+                qc_fail_count += 1
+                continue
+
+            qc_pass_count += 1
             profile_levels.append(
                 ArgoProfileLevelItem(
-                    pressure=float(pres),
-                    temperature=float(temp) if temp is not None else None,
-                    salinity=float(psal) if psal is not None else None,
+                    pressure=round(float(pres), 1),
+                    temperature=cleaned_temp,
+                    salinity=cleaned_saln,
+                    qc_flag=1 if (temp_status == "PASSED" and saln_status == "PASSED") else 2,
+                    qc_status="PASSED" if (temp_status == "PASSED" and saln_status == "PASSED") else "FLAGGED",
                 )
             )
 
@@ -164,6 +188,10 @@ class INCOISErddapProvider(OceanDataProvider):
             timestamp=str(time_str) if time_str else None,
             retrieved_at=datetime.now(timezone.utc).isoformat(),
             is_live_data=True,
+            valid_count=len(profile_levels),
+            missing_count=qc_fail_count,
+            qc_pass_count=qc_pass_count,
+            qc_fail_count=qc_fail_count,
             profile=profile_levels,
         )
 
@@ -176,4 +204,3 @@ class INCOISErddapProvider(OceanDataProvider):
 
     def get_model_current(self, latitude, longitude, depth=0.0, time_str=None):
         raise NotImplementedError("INCOISErddapProvider provides in-situ observations, not model outputs.")
-

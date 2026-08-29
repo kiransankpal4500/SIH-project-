@@ -3,6 +3,7 @@ import { QuickMetrics } from './QuickMetrics';
 import { SystemStatusCard } from './SystemStatusCard';
 import { RecentAlerts } from './RecentAlerts';
 import { Card } from '../common/Card';
+import { DataStatusCard } from '../common/DataStatusCard';
 import { OceanSystemStats, DisasterIndicator, Observation } from '../../types';
 import { OceanGlobeContainer } from '../../three/OceanGlobe/OceanGlobeContainer';
 import { Compass, ExternalLink } from 'lucide-react';
@@ -20,6 +21,9 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ stats, alerts, obs
     <div className="space-y-4">
       {/* Metrics Row */}
       <QuickMetrics stats={stats} />
+
+      {/* Real-time Data Feed & Ingestion Status */}
+      <DataStatusCard />
 
       {/* Main Grid: 3D Viewport Shell + Side Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
