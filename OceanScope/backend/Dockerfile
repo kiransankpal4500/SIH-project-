@@ -7,23 +7,26 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-dev \
     libnetcdf-dev \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application source code (datasets excluded via .dockerignore)
 COPY . .
 
-# Create data directory
-RUN mkdir -p data/netcdf/hycom
+# Create persistent storage mount point
+RUN mkdir -p /data/hycom
 
-# Environment defaults
+# Production Environment defaults
 ENV HOST=0.0.0.0
 ENV PORT=8000
 ENV DEBUG=false
+ENV HYCOM_DATA_DIRECTORY=/data/hycom
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

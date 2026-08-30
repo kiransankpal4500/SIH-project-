@@ -16,7 +16,7 @@ class Settings:
     DEBUG: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 
     # CORS — configurable origins for production
-    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
+    CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", os.getenv("CORS_ORIGINS", "*"))
 
     # INCOIS ERDDAP Configuration
     INCOIS_ERDDAP_BASE_URL: str = os.getenv(
@@ -27,9 +27,10 @@ class Settings:
     CACHE_EXPIRATION_SECONDS: int = int(os.getenv("CACHE_EXPIRATION_SECONDS", "600"))
 
     # HYCOM NetCDF Model Storage Configuration
+    # In production container, default to persistent volume mount /data/hycom
     HYCOM_DATA_DIRECTORY: str = os.getenv(
         "HYCOM_DATA_DIRECTORY",
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "netcdf", "hycom")
+        "/data/hycom" if os.path.exists("/data/hycom") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "netcdf", "hycom")
     )
 
     # Server Configuration

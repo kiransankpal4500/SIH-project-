@@ -1,6 +1,5 @@
 import React from 'react';
 import { Navbar } from './Navbar';
-import { Header } from '../common/Header';
 import { Footer } from '../common/Footer';
 
 interface MainLayoutProps {
@@ -9,11 +8,11 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-ocean-950 text-slate-100 font-sans">
-      <Header />
+    <div className="min-h-screen flex flex-col bg-[#030712] text-slate-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
       <Navbar />
-      <main className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto">{children}</main>
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-3">{children}</main>
       <Footer />
     </div>
   );
 };
+

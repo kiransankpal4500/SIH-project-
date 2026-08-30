@@ -1,0 +1,12 @@
+{
+  "installCommand": "cd OceanScope/frontend && npm install",
+  "buildCommand": "cd OceanScope/frontend && npm run build",
+  "outputDirectory": "OceanScope/frontend/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

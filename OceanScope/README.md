@@ -298,29 +298,88 @@ See [`docs/data/quality_control.md`](docs/data/quality_control.md) for detailed 
 
 ---
 
-## 🐳 Docker Deployment
+## 🚀 Production Deployment Architecture
 
-### Using Docker Compose (recommended)
-```bash
-docker-compose up --build
+OceanScope uses a decoupled, hybrid cloud deployment architecture designed for scientific oceanographic data workloads:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                      VERCEL EDGE CDN                        │
+│             React 19 + Vite + Three.js Frontend             │
+│               (Configured via VITE_API_URL)                 │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTPS REST API
+┌──────────────────────────────▼──────────────────────────────┐
+│                  PERSISTENT BACKEND SERVER                  │
+│       FastAPI + Python 3.11 + xarray + NetCDF4 Engine       │
+│                  (Runs 24/7 on VM / Container)              │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │ Local I/O                    │ HTTPS REST
+┌──────────────▼──────────────┐ ┌─────────────▼───────────────┐
+│  EXTERNAL PERSISTENT VOLUME │ │        INCOIS ERDDAP        │
+│       Mounted at:           │ │   Live Argo Float Telemetry │
+│       /data/hycom           │ │   In-situ CTD Profile Feeds │
+│   (RSMC_hycom_*.nc Files)   │ └─────────────────────────────┘
+└─────────────────────────────┘
 ```
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8000`
 
-### Individual containers
+> [!IMPORTANT]
+> **Why HYCOM NetCDF Datasets are Stored Separately:**
+> Real operational ocean forecast files (`RSMC_hycom_*.nc`) range from **6 GB to 10+ GB each**. They are excluded from Git repository commits and Vercel builds via `.gitignore` and `.dockerignore`. Instead, they reside on a persistent block storage volume mounted directly to the FastAPI backend at `/data/hycom`.
+
+---
+
+### 1. Frontend Deployment (Vercel)
+
+- **Framework Preset**: Vite
+- **Root Directory**: `OceanScope/frontend` (or repository root using provided `vercel.json`)
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Required Environment Variable**:
+  ```env
+  VITE_API_URL=https://api.your-oceanscope-backend.com
+  ```
+- **SPA Routing**: Handled automatically by `vercel.json` rewrites (prevents 404 on `/explorer`, `/observations`, `/analytics`).
+
+---
+
+### 2. Backend Server Deployment (Persistent Server / VM / Docker)
+
+Because NetCDF operations require `xarray`, `libnetcdf`, and persistent disk access to large multi-gigabyte arrays, the backend must run on a persistent container or virtual machine (AWS EC2, GCP Compute Engine, DigitalOcean Droplet, Railway, Render with persistent disk):
+
+- **Python Version**: `3.11+`
+- **System Libraries**: `libhdf5-dev`, `libnetcdf-dev`
+- **Memory Recommendation**: 4 GB+ RAM (8 GB recommended for concurrent NetCDF slicing)
+- **Persistent Storage**: 20 GB+ SSD volume mounted at `/data/hycom`
+- **Startup Command**:
+  ```bash
+  uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+  ```
+- **Required Environment Variables**:
+  ```env
+  HOST=0.0.0.0
+  PORT=8000
+  DEBUG=false
+  CORS_ALLOWED_ORIGINS=https://your-oceanscope.vercel.app
+  HYCOM_DATA_DIRECTORY=/data/hycom
+  INCOIS_ERDDAP_BASE_URL=https://erddap.incois.gov.in/erddap/
+  ```
+
+---
+
+### 3. Docker & Container Deployment
+
 ```bash
-# Backend
-cd backend && docker build -t oceanscope-backend .
-docker run -p 8000:8000 -v ./data/netcdf:/app/data/netcdf oceanscope-backend
-
-# Frontend
-cd frontend && docker build -t oceanscope-frontend \
-  --build-arg VITE_API_BASE_URL=http://your-backend:8000/api/v1 .
-docker run -p 3000:80 oceanscope-frontend
+# Build and run backend container with persistent storage volume
+docker build -t oceanscope-backend ./backend
+docker run -d \
+  -p 8000:8000 \
+  -e CORS_ALLOWED_ORIGINS="https://your-app.vercel.app" \
+  -e HYCOM_DATA_DIRECTORY="/data/hycom" \
+  -v /var/data/hycom:/data/hycom:ro \
+  --name oceanscope-backend \
+  oceanscope-backend
 ```
-
-### NetCDF Data Directory
-Mount `backend/data/netcdf/hycom/` as a volume to persist HYCOM datasets between container restarts.
 
 ---
 

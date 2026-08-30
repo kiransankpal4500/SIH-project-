@@ -1,0 +1,18 @@
+# Node dependencies
+node_modules/
+.pnpm-store/
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Python / NetCDF
+*.nc
+*.nc4
+__pycache__/
+*.pyc
+.env
+.env.local
+.DS_Store

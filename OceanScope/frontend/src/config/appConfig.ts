@@ -12,7 +12,14 @@ export const APP_CONFIG = {
   
   // API settings
   api: {
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1',
+    baseUrl: (() => {
+      const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+        const trimmed = envUrl.trim().replace(/\/+$/, '');
+        return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+      }
+      return '/api/v1';
+    })(),
     timeoutMs: 10000,
     enableMockData: import.meta.env.VITE_ENABLE_MOCK_DATA === 'true',
   },
@@ -46,8 +53,9 @@ export const APP_CONFIG = {
     { depth: 2000, label: 'Abyssal Zone (2000m)' },
   ],
 
-  // Ocean Data Sources
+  // Ocean & Geographic Data Sources
   dataSources: [
+    { id: 'NASA', name: 'NASA Blue Marble: Next Generation (Earth Observatory / MODIS)' },
     { id: 'INCOIS', name: 'INCOIS (Indian National Centre for Ocean Information Services)' },
     { id: 'ARGO', name: 'Argo Float Global Array' },
     { id: 'HYCOM', name: 'HYCOM (Hybrid Coordinate Ocean Model)' },

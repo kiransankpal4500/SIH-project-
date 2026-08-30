@@ -1,0 +1,8 @@
+{
+  "name": "sih-project-root",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix OceanScope/frontend run build",
+    "install": "npm --prefix OceanScope/frontend install"
+  }
+}
