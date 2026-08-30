@@ -423,8 +423,63 @@ class INCOISHYCOMService:
             logger.debug(f"[CACHE HIT] Argo comparison for float {platform_number} in {(time.time() - t0)*1000:.2f}ms")
             return cached
 
-        hycom_prof = self.get_profile(latitude=obs_lat, longitude=obs_lon, time_str=obs_time)
-        
+        try:
+            hycom_prof = self.get_profile(latitude=obs_lat, longitude=obs_lon, time_str=obs_time)
+        except ValueError as ve:
+            # Handle unmounted / unavailable HYCOM storage gracefully with clear scientific status
+            logger.warning(f"HYCOM profile unavailable for Argo comparison float {platform_number}: {ve}")
+            hycom_prof = None
+
+        if hycom_prof is None:
+            items_unavail: List[ModelObservationComparisonItem] = []
+            for lvl in argo_levels:
+                raw_pres = lvl.get("pressure", 0.0)
+                if is_fill_value(raw_pres):
+                    continue
+                pressure_depth = round(float(raw_pres), 1)
+                clean_obs_temp, _ = validate_temperature(lvl.get("temperature"))
+                clean_obs_sal, _ = validate_salinity(lvl.get("salinity"))
+                items_unavail.append(
+                    ModelObservationComparisonItem(
+                        depth=pressure_depth,
+                        model_temperature=None,
+                        observed_temperature=clean_obs_temp,
+                        temperature_difference=None,
+                        model_salinity=None,
+                        observed_salinity=clean_obs_sal,
+                        salinity_difference=None,
+                        qc_status="PASSED" if (clean_obs_temp is not None or clean_obs_sal is not None) else "FLAGGED",
+                        is_valid_pair=False,
+                    )
+                )
+            return ModelObservationComparisonResponse(
+                source_model="INCOIS HYCOM",
+                source_observation="INCOIS Argo",
+                platform_number=platform_number,
+                cycle_number=cycle_number,
+                observation_latitude=obs_lat,
+                observation_longitude=obs_lon,
+                model_latitude=obs_lat,
+                model_longitude=obs_lon,
+                distance_km=0.0,
+                observation_time=obs_time,
+                model_time="UNAVAILABLE",
+                time_difference_hours=0.0,
+                selected_file="HYCOM DATA STORAGE NOT MOUNTED",
+                matched_depth_count=len(items_unavail),
+                valid_pairs_count=0,
+                missing_count=0,
+                qc_pass_count=len(items_unavail),
+                qc_fail_count=0,
+                temp_bias=None,
+                temp_rmse=None,
+                temp_mae=None,
+                sal_bias=None,
+                sal_rmse=None,
+                sal_mae=None,
+                profile_comparison=items_unavail,
+            )
+
         distance_km = self.calculate_haversine_km(obs_lat, obs_lon, hycom_prof.latitude, hycom_prof.longitude)
 
         # Time difference calculation in hours
