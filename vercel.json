@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd OceanScope/frontend && npm install",
+  "installCommand": "cd OceanScope/frontend && npm install --loglevel=error",
   "buildCommand": "cd OceanScope/frontend && npm run build",
   "outputDirectory": "OceanScope/frontend/dist",
   "framework": "vite",
