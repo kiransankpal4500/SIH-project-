@@ -20,9 +20,9 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description=settings.DESCRIPTION,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS Middleware — configurable origins
@@ -66,6 +66,7 @@ async def root():
 
 
 @app.get("/health")
+@app.get(f"{settings.API_V1_STR}/health")
 async def health_check():
     return {
         "status": "healthy",
