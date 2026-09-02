@@ -6,7 +6,7 @@ import { Card } from '../common/Card';
 import { DataStatusCard } from '../common/DataStatusCard';
 import { OceanSystemStats, DisasterIndicator, Observation } from '../../types';
 import { OceanGlobeContainer } from '../../three/OceanGlobe/OceanGlobeContainer';
-import { Compass, ExternalLink } from 'lucide-react';
+import { Compass, ExternalLink, Globe } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { formatCoordinates, formatValue } from '../../utils/formatters';
 
@@ -18,7 +18,7 @@ interface DashboardGridProps {
 
 export const DashboardGrid: React.FC<DashboardGridProps> = ({ stats, alerts, observations }) => {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Metrics Row */}
       <QuickMetrics stats={stats} />
 
@@ -26,58 +26,63 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ stats, alerts, obs
       <DataStatusCard />
 
       {/* Main Grid: 3D Viewport Shell + Side Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column: 3D Explorer Preview Placeholder */}
-        <div className="lg:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: 3D Explorer Preview */}
+        <div className="lg:col-span-2 space-y-6">
           <Card
-            title="3D Ocean Viewport (Interactive Preview)"
-            subtitle="Global ocean numerical model output layer"
+            title={
+              <div className="flex items-center gap-2">
+                <Globe className="w-5 h-5 text-[#0B84C6]" />
+                <span>3D Ocean GIS Viewport (Live Preview)</span>
+              </div>
+            }
+            subtitle="Global numerical model output layer with interactive orbit controls"
             action={
               <NavLink
                 to="/explorer"
-                className="text-xs text-ocean-400 hover:text-ocean-300 flex items-center gap-1 font-mono"
+                className="text-xs text-[#0B84C6] hover:text-[#085A8A] font-semibold flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F2FE] rounded-lg transition-colors"
               >
-                <span>Full Screen 3D</span>
-                <ExternalLink className="w-3 h-3" />
+                <span>Open Fullscreen 3D</span>
+                <ExternalLink className="w-3.5 h-3.5" />
               </NavLink>
             }
           >
-            <OceanGlobeContainer variable="temperature" depth={0} />
+            <OceanGlobeContainer variable="temperature" depth={0} heightClass="h-[480px]" />
           </Card>
 
           <SystemStatusCard stats={stats} />
         </div>
 
         {/* Right Column: Alerts & Active In-situ Platforms */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           <RecentAlerts alerts={alerts} />
 
           <Card
             title={
               <div className="flex items-center space-x-2">
-                <Compass className="w-4 h-4 text-ocean-400" />
-                <span className="text-sm font-semibold text-slate-100">Live Platform Ingestion</span>
+                <Compass className="w-5 h-5 text-[#0B84C6]" />
+                <span className="text-base font-bold text-[#172033]">Live Ingested Platforms</span>
               </div>
             }
-            subtitle="In-situ Argo float & mooring streams"
+            subtitle="Active in-situ Argo profiling float streams"
           >
-            <div className="space-y-2.5 font-mono text-xs">
-              {observations.map((obs) => (
+            <div className="space-y-2.5 text-xs">
+              {observations.slice(0, 6).map((obs) => (
                 <div
                   key={obs.id}
-                  className="bg-ocean-850 border border-ocean-800 rounded p-2.5 flex items-center justify-between"
+                  className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-3 flex items-center justify-between hover:border-[#CBD5E1] transition-colors"
                 >
                   <div>
-                    <div className="text-white font-bold">{obs.platformId}</div>
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[#0B84C6] font-bold text-xs">Float #{obs.platformId}</div>
+                    <div className="text-[11px] text-[#64748B] mt-0.5">
                       {formatCoordinates(obs.location.latitude, obs.location.longitude)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-ocean-300 font-semibold">
-                      SST: {formatValue(obs.variables.temperature, '°C')}
+                    <div className="text-[#DC2626] font-bold">
+                      {formatValue(obs.variables.temperature, '°C')}
                     </div>
-                    <div className="text-[10px] text-slate-400">{obs.source}</div>
+                    <div className="text-[10px] text-[#64748B] font-medium uppercase mt-0.5">{obs.source}</div>
                   </div>
                 </div>
               ))}

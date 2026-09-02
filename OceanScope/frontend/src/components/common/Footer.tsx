@@ -3,17 +3,17 @@ import { APP_CONFIG } from '../../config/appConfig';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="bg-ocean-950 border-t border-ocean-850 px-4 py-3 text-xs text-slate-400 font-mono flex flex-col sm:flex-row items-center justify-between gap-2">
+    <footer className="bg-[#FFFFFF] border-t border-[#E2E8F0] px-6 py-4 text-xs text-[#64748B] flex flex-col sm:flex-row items-center justify-between gap-3 mt-auto">
       <div>
-        <span>© 2026 {APP_CONFIG.name} — Interactive Ocean Visualization Platform</span>
+        <span>© 2026 {APP_CONFIG.name} — Operational Oceanographic Research Platform</span>
       </div>
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-3 text-xs font-medium text-[#475569]">
         <span>INCOIS</span>
-        <span>•</span>
+        <span className="text-[#CBD5E1]">•</span>
         <span>Argo Array</span>
-        <span>•</span>
-        <span>HYCOM</span>
-        <span>•</span>
+        <span className="text-[#CBD5E1]">•</span>
+        <span>HYCOM Model</span>
+        <span className="text-[#CBD5E1]">•</span>
         <span>Copernicus Marine</span>
       </div>
     </footer>

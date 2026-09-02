@@ -4,6 +4,18 @@ All values are configurable via environment variables for production deployment.
 """
 
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Automatically find and load .env from backend directory or project root
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+_env_paths = [
+    _backend_dir / ".env",
+    _backend_dir.parent / ".env",
+]
+for _env_path in _env_paths:
+    if _env_path.exists():
+        load_dotenv(dotenv_path=_env_path, override=False)
 
 
 class Settings:
@@ -11,6 +23,10 @@ class Settings:
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     DESCRIPTION: str = "Scientific Ocean Model Outputs & INCOIS Real Telemetry Service"
+
+    # Copernicus Marine Service Credentials
+    COPERNICUSMARINE_SERVICE_USERNAME: str = os.getenv("COPERNICUSMARINE_SERVICE_USERNAME", "")
+    COPERNICUSMARINE_SERVICE_PASSWORD: str = os.getenv("COPERNICUSMARINE_SERVICE_PASSWORD", "")
 
     # Debug mode — disable in production
     DEBUG: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")

@@ -6,6 +6,7 @@ interface CardProps {
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  headerClassName?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -14,18 +15,19 @@ export const Card: React.FC<CardProps> = ({
   action,
   children,
   className = '',
+  headerClassName = '',
 }) => {
   return (
-    <div className={`bg-ocean-900 border border-ocean-800 rounded-lg p-4 shadow-md ${className}`}>
+    <div className={`bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] ${className}`}>
       {(title || action) && (
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-ocean-800/80">
+        <div className={`flex items-center justify-between pb-3.5 mb-4 border-b border-[#F1F5F9] ${headerClassName}`}>
           <div>
             {typeof title === 'string' ? (
-              <h3 className="text-sm font-semibold text-slate-100 tracking-wide">{title}</h3>
+              <h3 className="text-base font-semibold text-[#172033] tracking-tight">{title}</h3>
             ) : (
               title
             )}
-            {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-[#64748B] mt-0.5 font-normal">{subtitle}</p>}
           </div>
           {action && <div>{action}</div>}
         </div>

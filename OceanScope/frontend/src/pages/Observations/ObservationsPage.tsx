@@ -24,16 +24,18 @@ export const ObservationsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-ocean-850 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Compass className="w-5 h-5 text-ocean-400" />
+          <h1 className="text-2xl font-bold text-[#172033] tracking-tight flex items-center gap-2.5">
+            <div className="p-2 bg-[#E0F2FE] text-[#0B84C6] rounded-lg">
+              <Compass className="w-5 h-5" />
+            </div>
             In-Situ Ocean Observations
           </h1>
-          <p className="text-xs font-mono text-slate-400">
-            Argo float arrays, INCOIS moored buoys, ship CTD profiles & satellite telemetry
+          <p className="text-sm text-[#64748B] mt-1">
+            Argo float arrays, INCOIS moored buoys, ship CTD vertical profiles, and satellite sensor telemetry.
           </p>
         </div>
       </div>
@@ -46,10 +48,10 @@ export const ObservationsPage: React.FC = () => {
         onSourceChange={setSelectedSource}
       />
 
-      {/* Table Shell */}
+      {/* Table Card */}
       <Card
-        title={`Registered Active Platforms (${filteredObservations.length})`}
-        subtitle="Live ingested spatial points ready for model cross-validation"
+        title={`Registered Active Sensor Platforms (${filteredObservations.length})`}
+        subtitle="Real-time ingested spatial observation points available for numerical model cross-validation"
       >
         <ObservationTablePlaceholder observations={filteredObservations} />
       </Card>

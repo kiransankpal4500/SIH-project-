@@ -14,20 +14,20 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyle =
-    'inline-flex items-center justify-center font-medium rounded transition-all focus:outline-none focus:ring-2 focus:ring-ocean-400 disabled:opacity-50 disabled:cursor-not-allowed';
+    'inline-flex items-center justify-center font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-[#0B84C6] disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variants = {
-    primary: 'bg-ocean-400 text-ocean-950 hover:bg-ocean-300 font-semibold shadow-sm',
-    secondary: 'bg-ocean-800 text-slate-100 hover:bg-ocean-700 border border-ocean-700',
-    outline: 'bg-transparent text-ocean-300 border border-ocean-400/40 hover:bg-ocean-400/10',
-    ghost: 'bg-transparent text-slate-300 hover:bg-ocean-800/60 hover:text-white',
-    danger: 'bg-rose-600 text-white hover:bg-rose-500 shadow-sm',
+    primary: 'bg-[#0B84C6] text-white hover:bg-[#085A8A] font-semibold shadow-sm',
+    secondary: 'bg-[#F8FAFC] text-[#172033] hover:bg-[#F1F5F9] border border-[#E2E8F0] shadow-sm',
+    outline: 'bg-transparent text-[#0B84C6] border border-[#0B84C6] hover:bg-[#E0F2FE]',
+    ghost: 'bg-transparent text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#172033]',
+    danger: 'bg-[#DC2626] text-white hover:bg-[#B91C1C] shadow-sm',
   };
 
   const sizes = {
     sm: 'px-2.5 py-1 text-xs gap-1.5',
-    md: 'px-3.5 py-1.5 text-sm gap-2',
-    lg: 'px-5 py-2.5 text-base gap-2.5',
+    md: 'px-4 py-2 text-xs font-semibold gap-2',
+    lg: 'px-5 py-2.5 text-sm font-semibold gap-2.5',
   };
 
   return (

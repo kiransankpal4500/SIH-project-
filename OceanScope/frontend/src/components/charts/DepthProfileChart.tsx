@@ -36,59 +36,60 @@ export const DepthProfileChart: React.FC<DepthProfileChartProps> = ({ height = 3
       }));
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-3 pt-2">
       {liveProfile && (
-        <div className="flex items-center justify-between text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded">
-          <span>LIVE INCOIS FLOAT #{liveProfile.platform_number} (Cycle #{liveProfile.cycle_number})</span>
-          <span>{liveProfile.profile.length} Pressure Levels</span>
+        <div className="flex items-center justify-between text-xs font-semibold text-[#15803D] bg-[#DCFCE7] border border-[#BBF7D0] px-3 py-1.5 rounded-lg">
+          <span>LIVE INCOIS ARGO FLOAT #{liveProfile.platform_number} (Cycle #{liveProfile.cycle_number})</span>
+          <span className="font-normal text-xs">{liveProfile.profile.length} Pressure Levels</span>
         </div>
       )}
 
-      <div style={{ height: `${height}px` }} className="w-full font-mono text-xs">
+      <div style={{ height: `${height}px` }} className="w-full text-xs font-sans">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1C2541" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
             <XAxis
               dataKey="temperature"
               type="number"
               domain={[0, 35]}
               unit="°C"
-              stroke="#94A3B8"
-              tick={{ fontSize: 11 }}
+              stroke="#64748B"
+              tick={{ fontSize: 11, fill: '#64748B' }}
             />
             <YAxis
               dataKey="depthValue"
               type="number"
               reversed
               unit={liveProfile ? ' dbar' : ' m'}
-              stroke="#94A3B8"
-              tick={{ fontSize: 11 }}
+              stroke="#64748B"
+              tick={{ fontSize: 11, fill: '#64748B' }}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0B132B',
-                borderColor: liveProfile ? '#10B981' : '#00B4D8',
-                borderRadius: '6px',
+                backgroundColor: '#FFFFFF',
+                borderColor: '#E2E8F0',
+                borderRadius: '8px',
                 fontSize: '12px',
-                color: '#F1F5F9',
+                color: '#172033',
+                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
               }}
             />
-            <Legend wrapperStyle={{ paddingTop: '10px' }} />
+            <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '12px' }} />
             <Line
               type="monotone"
               dataKey="temperature"
               name="Temperature (°C)"
-              stroke="#EF4444"
+              stroke="#DC2626"
               strokeWidth={2.5}
-              dot={{ r: 3, fill: '#EF4444' }}
+              dot={{ r: 3.5, fill: '#DC2626' }}
             />
             <Line
               type="monotone"
               dataKey="salinity"
               name="Salinity (PSU)"
-              stroke="#00B4D8"
+              stroke="#0B84C6"
               strokeWidth={2}
-              dot={{ r: 3, fill: '#00B4D8' }}
+              dot={{ r: 3.5, fill: '#0B84C6' }}
             />
           </LineChart>
         </ResponsiveContainer>

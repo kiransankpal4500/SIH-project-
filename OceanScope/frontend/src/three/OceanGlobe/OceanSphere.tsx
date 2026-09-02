@@ -6,6 +6,7 @@ interface OceanSphereProps {
   variable?: string;
   depth?: number;
   onClick?: (point: THREE.Vector3) => void;
+  onDoubleClick?: (point: THREE.Vector3) => void;
 }
 
 const NASA_TEXTURE_URL = '/assets/textures/earth_nasa_blue_marble_2k.jpg';
@@ -253,6 +254,7 @@ export const OceanSphere: React.FC<OceanSphereProps> = ({
   variable = 'temperature',
   depth = 0,
   onClick,
+  onDoubleClick,
 }) => {
   const [nasaImage, setNasaImage] = useState<HTMLImageElement | null>(null);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -301,6 +303,12 @@ export const OceanSphere: React.FC<OceanSphereProps> = ({
           onClick(e.point);
         }
       }}
+      onDoubleClick={(e) => {
+        if (onDoubleClick) {
+          e.stopPropagation();
+          onDoubleClick(e.point);
+        }
+      }}
     >
       <sphereGeometry args={[GLOBE_RADIUS, 96, 96]} />
       <meshStandardMaterial
@@ -313,4 +321,5 @@ export const OceanSphere: React.FC<OceanSphereProps> = ({
     </mesh>
   );
 };
+
 

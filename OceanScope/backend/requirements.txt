@@ -7,3 +7,4 @@ xarray>=2024.02.0
 netCDF4>=1.6.5
 requests>=2.31.0
 python-dotenv>=1.0.0
+copernicusmarine>=1.0.0

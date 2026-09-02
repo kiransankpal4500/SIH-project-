@@ -14,5 +14,11 @@ build/
 __pycache__/
 *.pyc
 .env
+.env.*
 .env.local
+*.env
+!.env.example
+!*.env.example
 .DS_Store
+.agents/
+

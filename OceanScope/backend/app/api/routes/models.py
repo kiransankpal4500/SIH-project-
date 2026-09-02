@@ -17,6 +17,7 @@ from app.schemas.hycom_schemas import (
 from app.services.ocean_service import OceanService
 from app.services.hycom_service import hycom_service
 from app.services.argo_service import argo_service
+from app.services.copernicus_service import copernicus_service
 from app.core.query_cache import global_query_cache
 
 router = APIRouter(prefix="/models", tags=["Numerical Ocean Models"])
@@ -178,3 +179,83 @@ async def compare_hycom_with_argo(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to compare HYCOM with Argo: {str(e)}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# COPERNICUS MARINE MODEL ENDPOINTS (MULTIOBS_GLO_PHY_TSUV_3D_MYNRT_015_012)
+# ══════════════════════════════════════════════════════════════════════════
+
+@router.get("/copernicus/status")
+async def get_copernicus_status():
+    """Check Copernicus Marine Service authentication and dataset readiness."""
+    try:
+        return copernicus_service.get_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+
+
+@router.get("/copernicus/metadata")
+async def get_copernicus_metadata():
+    """Retrieve variables, depth levels, units, and dataset IDs for Copernicus Marine."""
+    try:
+        return copernicus_service.get_metadata()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+
+
+@router.get("/copernicus/point")
+async def get_copernicus_point(
+    latitude: float = Query(..., description="Latitude in degrees (-90 to 90)"),
+    longitude: float = Query(..., description="Longitude in degrees (-180 to 180)"),
+    depth: float = Query(0.0, description="Depth level in meters"),
+    variable: str = Query("temperature", description="Variable: temperature, salinity, mld, height"),
+    time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
+):
+    """Query single point ocean data from Copernicus Marine MULTIOBS dataset."""
+    try:
+        return copernicus_service.get_point(
+            latitude=latitude,
+            longitude=longitude,
+            depth=depth,
+            variable=variable,
+            time=time,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+
+
+@router.get("/copernicus/profile")
+async def get_copernicus_profile(
+    latitude: float = Query(..., description="Latitude in degrees (-90 to 90)"),
+    longitude: float = Query(..., description="Longitude in degrees (-180 to 180)"),
+    time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
+):
+    """Query complete vertical soundings (Temperature & Salinity vs Depth) from Copernicus Marine."""
+    try:
+        return copernicus_service.get_profile(
+            latitude=latitude,
+            longitude=longitude,
+            time=time,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+
+
+@router.get("/copernicus/current")
+async def get_copernicus_current(
+    latitude: float = Query(..., description="Latitude in degrees (-90 to 90)"),
+    longitude: float = Query(..., description="Longitude in degrees (-180 to 180)"),
+    depth: float = Query(0.0, description="Depth level in meters"),
+    time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
+):
+    """Query eastward/northward current velocities, compute speed and direction from Copernicus Marine."""
+    try:
+        return copernicus_service.get_current(
+            latitude=latitude,
+            longitude=longitude,
+            depth=depth,
+            time=time,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+

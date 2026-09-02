@@ -27,33 +27,34 @@ const mockSstTimeline = [
 
 export const SstTimeSeriesChart: React.FC<SstTimeSeriesChartProps> = ({ height = 300 }) => {
   return (
-    <div style={{ height: `${height}px` }} className="w-full font-mono text-xs">
+    <div style={{ height: `${height}px` }} className="w-full text-xs font-sans pt-2">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={mockSstTimeline} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
           <defs>
             <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#EF4444" stopOpacity={0.0} />
+              <stop offset="5%" stopColor="#DC2626" stopOpacity={0.15} />
+              <stop offset="95%" stopColor="#DC2626" stopOpacity={0.0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1C2541" />
-          <XAxis dataKey="date" stroke="#94A3B8" tick={{ fontSize: 11 }} />
-          <YAxis domain={[25, 31]} unit="°C" stroke="#94A3B8" tick={{ fontSize: 11 }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+          <XAxis dataKey="date" stroke="#64748B" tick={{ fontSize: 11, fill: '#64748B' }} />
+          <YAxis domain={[25, 31]} unit="°C" stroke="#64748B" tick={{ fontSize: 11, fill: '#64748B' }} />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#0B132B',
-              borderColor: '#EF4444',
-              borderRadius: '6px',
+              backgroundColor: '#FFFFFF',
+              borderColor: '#E2E8F0',
+              borderRadius: '8px',
               fontSize: '12px',
-              color: '#F1F5F9',
+              color: '#172033',
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
             }}
           />
-          <Legend wrapperStyle={{ paddingTop: '10px' }} />
+          <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} />
           <Area
             type="monotone"
             dataKey="observed"
             name="Observed SST (°C)"
-            stroke="#EF4444"
+            stroke="#DC2626"
             fillOpacity={1}
             fill="url(#colorTemp)"
             strokeWidth={2.5}
@@ -61,10 +62,10 @@ export const SstTimeSeriesChart: React.FC<SstTimeSeriesChartProps> = ({ height =
           <Line
             type="monotone"
             dataKey="baseline"
-            name="30y Mean Baseline (°C)"
-            stroke="#94A3B8"
-            strokeDasharray="5 5"
-            strokeWidth={2}
+            name="30y Climatological Mean (°C)"
+            stroke="#64748B"
+            strokeDasharray="4 4"
+            strokeWidth={1.75}
           />
         </AreaChart>
       </ResponsiveContainer>

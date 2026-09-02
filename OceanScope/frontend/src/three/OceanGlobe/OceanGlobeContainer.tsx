@@ -24,16 +24,18 @@ interface OceanGlobeContainerProps {
   showPoints?: boolean;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  onDoubleSelectLocation?: (lat: number, lon: number) => void;
 }
 
 export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
   variable = 'temperature',
   depth = 0,
-  heightClass = 'h-[75vh] min-h-[540px]',
+  heightClass = 'h-[72vh] min-h-[520px]',
   showCurrents: propShowCurrents,
   showPoints: propShowPoints,
   isFullscreen = false,
   onToggleFullscreen,
+  onDoubleSelectLocation,
 }) => {
   const {
     state,
@@ -71,9 +73,16 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
     evaluateLocationRisk(lat, lon, depth, state.selectedTimestamp);
   };
 
+  const handleGlobeDoubleClick = (point: THREE.Vector3) => {
+    const { lat, lon } = vector3ToLatLon(point);
+    if (onDoubleSelectLocation) {
+      onDoubleSelectLocation(lat, lon);
+    }
+  };
+
   return (
     <div
-      className={`relative w-full ${heightClass} bg-[#020610] rounded-lg overflow-hidden`}
+      className={`relative w-full ${heightClass} bg-[#040914] border border-[#E2E8F0] rounded-xl shadow-[0_2px_10px_rgba(15,23,42,0.06)] overflow-hidden`}
     >
       {/* Three.js R3F Canvas */}
       <Canvas
@@ -82,12 +91,17 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         {/* Lighting */}
-        <ambientLight intensity={0.85} />
-        <directionalLight position={[12, 9, 10]} intensity={1.25} color="#FFFBF5" />
-        <directionalLight position={[-12, -6, -10]} intensity={0.18} color="#1E3A8A" />
+        <ambientLight intensity={0.9} />
+        <directionalLight position={[12, 9, 10]} intensity={1.3} color="#FFFBF5" />
+        <directionalLight position={[-12, -6, -10]} intensity={0.22} color="#1E3A8A" />
 
         {/* Core Earth & Atmosphere */}
-        <OceanSphere variable={variable} depth={depth} onClick={handleGlobeClick} />
+        <OceanSphere
+          variable={variable}
+          depth={depth}
+          onClick={handleGlobeClick}
+          onDoubleClick={handleGlobeDoubleClick}
+        />
         <AtmosphereGlow />
 
         {/* Risk Hotspots */}
@@ -111,11 +125,11 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
           >
             <mesh rotation={[Math.PI / 2, 0, 0]}>
               <ringGeometry args={[0.065, 0.08, 32]} />
-              <meshBasicMaterial color="#38BDF8" side={THREE.DoubleSide} />
+              <meshBasicMaterial color="#0B84C6" side={THREE.DoubleSide} />
             </mesh>
             <mesh>
               <sphereGeometry args={[0.02, 16, 16]} />
-              <meshBasicMaterial color="#38BDF8" />
+              <meshBasicMaterial color="#0B84C6" />
             </mesh>
           </group>
         )}
@@ -145,7 +159,7 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
                     >
                       <octahedronGeometry args={[isSelected ? 0.075 : isHovered ? 0.065 : 0.042]} />
                       <meshStandardMaterial
-                        color={isSelected ? '#F59E0B' : isHovered ? '#38BDF8' : '#10B981'}
+                        color={isSelected ? '#F59E0B' : isHovered ? '#0B84C6' : '#16A34A'}
                         roughness={0.3}
                       />
                     </mesh>
@@ -157,19 +171,19 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
                       </mesh>
                     )}
 
-                    {/* Clean Tooltip */}
+                    {/* Clean Light Floating Tooltip */}
                     {isHovered && (
                       <Html distanceFactor={8.5} zIndexRange={[100, 0]}>
-                        <div className="bg-slate-950/95 border border-slate-700/80 px-3 py-2 rounded text-xs font-sans text-slate-100 shadow-xl pointer-events-none w-48 -translate-x-1/2 -translate-y-full mb-3 backdrop-blur-md">
-                          <div className="font-medium text-slate-200 text-xs mb-1">
-                            Float #{obs.platform_number}
-                            <span className="text-slate-400 font-normal ml-1.5">Cycle {obs.cycle_number}</span>
+                        <div className="bg-[#FFFFFF] border border-[#E2E8F0] px-3.5 py-2.5 rounded-xl text-xs font-sans text-[#172033] shadow-dropdown pointer-events-none w-52 -translate-x-1/2 -translate-y-full mb-3">
+                          <div className="font-bold text-[#172033] text-xs mb-1 flex items-center justify-between">
+                            <span>Float #{obs.platform_number}</span>
+                            <span className="text-[#0B84C6] bg-[#E0F2FE] text-[10px] px-1.5 py-0.5 rounded font-medium">Cycle {obs.cycle_number}</span>
                           </div>
-                          <div className="text-[11px] text-slate-400 space-y-0.5">
+                          <div className="text-[11px] text-[#64748B] space-y-1">
                             <div>{formatCoordinates(obs.latitude, obs.longitude)}</div>
-                            <div className="flex justify-between pt-0.5">
-                              <span className="text-slate-200">{formatValue(obs.temperature, '°C')}</span>
-                              <span className="text-slate-200">{formatValue(obs.salinity, 'PSU')}</span>
+                            <div className="flex justify-between pt-1 border-t border-[#F1F5F9] font-medium">
+                              <span className="text-[#DC2626]">T: {formatValue(obs.temperature, '°C')}</span>
+                              <span className="text-[#0B84C6]">S: {formatValue(obs.salinity, 'PSU')}</span>
                             </div>
                           </div>
                         </div>
@@ -198,23 +212,23 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
         />
       </Canvas>
 
-      {/* Bottom Left: Minimal Color Legend */}
-      <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
+      {/* Bottom Left: Clean Floating Color Legend */}
+      <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
         <ScientificColorBar variable={variable} />
       </div>
 
-      {/* Bottom Right: Rotate toggle only */}
-      <div className="absolute bottom-3 right-3 z-10">
+      {/* Bottom Right: Clean Light Rotate Toggle */}
+      <div className="absolute bottom-4 right-4 z-10">
         <button
           onClick={() => setAutoRotate(!autoRotate)}
-          className={`p-1.5 rounded-full backdrop-blur-md transition-colors ${
+          className={`p-2.5 rounded-xl border border-[#E2E8F0] shadow-sm transition-all ${
             autoRotate
-              ? 'bg-slate-800/90 text-cyan-300'
-              : 'bg-slate-900/70 text-slate-400 hover:text-slate-200'
+              ? 'bg-[#E0F2FE] text-[#0B84C6] border-[#BAE6FD]'
+              : 'bg-[#FFFFFF]/90 hover:bg-[#FFFFFF] text-[#64748B] hover:text-[#172033]'
           }`}
           title="Toggle Rotation"
         >
-          <RotateCw className="w-3.5 h-3.5" />
+          <RotateCw className="w-4 h-4" />
         </button>
       </div>
     </div>

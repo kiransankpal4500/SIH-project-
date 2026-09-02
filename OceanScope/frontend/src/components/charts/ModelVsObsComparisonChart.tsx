@@ -50,30 +50,30 @@ export const ModelVsObsComparisonChart: React.FC<ModelVsObsComparisonChartProps>
 
   return (
     <div className="space-y-2">
-      <div style={{ height: `${height}px` }} className="w-full font-mono text-xs">
+      <div style={{ height: `${height}px` }} className="w-full text-xs font-sans">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
             <XAxis
               dataKey="depthValue"
               unit="m"
-              stroke="#64748b"
-              tick={{ fontSize: 10 }}
+              stroke="#64748B"
+              tick={{ fontSize: 11, fill: '#64748B' }}
             />
             <YAxis
               domain={valDomain}
               unit={` ${unit}`}
-              stroke="#64748b"
-              tick={{ fontSize: 10 }}
+              stroke="#64748B"
+              tick={{ fontSize: 11, fill: '#64748B' }}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0b1220',
-                borderColor: '#334155',
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                color: '#f1f5f9',
+                backgroundColor: '#FFFFFF',
+                borderColor: '#E2E8F0',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: '#172033',
+                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
               }}
               formatter={(value: number, name: string) => [
                 `${Number(value)?.toFixed(3)} ${unit}`,
@@ -82,28 +82,27 @@ export const ModelVsObsComparisonChart: React.FC<ModelVsObsComparisonChartProps>
             />
             <Legend
               wrapperStyle={{
-                paddingTop: '6px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
+                paddingTop: '10px',
+                fontSize: '12px',
               }}
             />
             <Line
               type="monotone"
               dataKey="hycomModel"
               name={`HYCOM Forecast (${unit})`}
-              stroke="#38bdf8"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#38bdf8' }}
+              stroke="#0B84C6"
+              strokeWidth={2.5}
+              dot={{ r: 3.5, fill: '#0B84C6' }}
               connectNulls
             />
             <Line
               type="monotone"
               dataKey="argoObservation"
               name={`Argo In-Situ (${unit})`}
-              stroke="#10b981"
+              stroke="#16A34A"
               strokeWidth={2}
               strokeDasharray="4 3"
-              dot={{ r: 3, fill: '#10b981' }}
+              dot={{ r: 3.5, fill: '#16A34A' }}
               connectNulls
             />
           </LineChart>

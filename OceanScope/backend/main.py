@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.api.routes import observations, models, disasters, data_status
+from app.api.routes import observations, models, disasters, data_status, bathymetry, marine_life
 
 # Configure structured logging
 logging.basicConfig(
@@ -43,6 +43,8 @@ app.include_router(observations.router, prefix=settings.API_V1_STR)
 app.include_router(models.router, prefix=settings.API_V1_STR)
 app.include_router(disasters.router, prefix=settings.API_V1_STR)
 app.include_router(data_status.router, prefix=settings.API_V1_STR)
+app.include_router(bathymetry.router, prefix=settings.API_V1_STR)
+app.include_router(marine_life.router, prefix=settings.API_V1_STR)
 
 
 @app.exception_handler(Exception)

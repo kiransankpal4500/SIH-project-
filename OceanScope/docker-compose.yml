@@ -13,6 +13,8 @@ services:
       - INCOIS_ERDDAP_BASE_URL=https://erddap.incois.gov.in/erddap/
       - HYCOM_DATA_DIRECTORY=/data/hycom
       - CACHE_EXPIRATION_SECONDS=600
+      - COPERNICUSMARINE_SERVICE_USERNAME=${COPERNICUSMARINE_SERVICE_USERNAME:-}
+      - COPERNICUSMARINE_SERVICE_PASSWORD=${COPERNICUSMARINE_SERVICE_PASSWORD:-}
     volumes:
       # External/persistent HYCOM storage mount
       - hycom_data:/data/hycom
