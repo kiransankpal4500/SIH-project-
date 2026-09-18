@@ -85,6 +85,7 @@ class ArgoService:
         if not self.latest_observation:
             self.latest_observation = "2026-08-28T05:30:00Z"
         self.last_retrieved = datetime.now(timezone.utc).isoformat()
+        self._set_cache(cache_key, fallback_res)
         return fallback_res
 
     async def get_argo_profile(
@@ -110,7 +111,9 @@ class ArgoService:
             self.is_connected = False
 
         # Fallback to demo profile data
-        return self._get_demo_profile(platform_number, cycle_number)
+        demo_prof = self._get_demo_profile(platform_number, cycle_number)
+        self._set_cache(cache_key, demo_prof)
+        return demo_prof
 
     def get_status(self) -> Dict[str, Any]:
         """Return status summary of the Argo telemetry connector."""

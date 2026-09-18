@@ -1,3 +1,8 @@
+/**
+ * Time & Depth Animation Player
+ * Controls timestep playback loops, variable animation speeds, and vertical depth levels.
+ */
+
 import React from 'react';
 import { useOceanContext } from '../../store/OceanContext';
 import { APP_CONFIG } from '../../config/appConfig';

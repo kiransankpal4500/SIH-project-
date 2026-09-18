@@ -2,23 +2,46 @@
 node_modules/
 .pnpm-store/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Build outputs
 dist/
 build/
 *.tsbuildinfo
+.vercel/
 
-# Python / NetCDF
-*.nc
-*.nc4
+# Python / Virtual Environments
+venv/
+.venv/
+env/
+ENV/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+
+# NetCDF and large scientific datasets
+*.nc
+*.nc4
+*.h5
+*.hdf5
+backend/data/netcdf/
+OceanScope/backend/data/netcdf/
+
+# Environment files
 .env
 .env.*
 .env.local
 *.env
 !.env.example
 !*.env.example
+
+# OS and agent artifacts
 .DS_Store
+Thumbs.db
 .agents/
+.firebase/
 

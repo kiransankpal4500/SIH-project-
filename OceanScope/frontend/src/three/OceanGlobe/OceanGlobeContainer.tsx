@@ -1,3 +1,8 @@
+/**
+ * 3D Ocean Globe WebGL Canvas Container
+ * Renders the Three.js viewport, orbit controls, procedural globe, observation pins, and risk hotspots.
+ */
+
 import React, { useState, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';

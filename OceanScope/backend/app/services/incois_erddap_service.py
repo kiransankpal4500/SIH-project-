@@ -8,6 +8,7 @@ import json
 import urllib.request
 import urllib.parse
 import ssl
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from app.core.config import settings
@@ -72,7 +73,7 @@ class INCOISErddapProvider(OceanDataProvider):
         )
         endpoint = f"{self.base_url}/tabledap/{self.dataset_id}.json?{encoded_query}"
 
-        raw_data = self._fetch_erddap_json(endpoint)
+        raw_data = await asyncio.to_thread(self._fetch_erddap_json, endpoint)
         rows = raw_data.get("table", {}).get("rows", [])
 
         seen_platforms: Dict[str, ArgoObservationItem] = {}
@@ -140,7 +141,7 @@ class INCOISErddapProvider(OceanDataProvider):
         )
         endpoint = f"{self.base_url}/tabledap/{self.dataset_id}.json?{encoded_query}"
 
-        raw_data = self._fetch_erddap_json(endpoint)
+        raw_data = await asyncio.to_thread(self._fetch_erddap_json, endpoint)
         rows = raw_data.get("table", {}).get("rows", [])
 
         profile_levels: List[ArgoProfileLevelItem] = []

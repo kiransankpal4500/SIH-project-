@@ -15,6 +15,7 @@ class OceanModelPoint(BaseModel):
     latitude: float
     longitude: float
     depth: float = 0.0
+    requested_depth: Optional[float] = None
     time: str
     model_time: str
     variable: str
@@ -56,6 +57,7 @@ class OceanModelCurrent(BaseModel):
     latitude: float
     longitude: float
     depth: float = 0.0
+    requested_depth: Optional[float] = None
     time: str
     model_time: str
     u: float
@@ -113,8 +115,24 @@ class OceanModelMetadata(BaseModel):
     lon_min: float
     lon_max: float
     longitude_range: List[float] = Field(default_factory=list)
+    available_years: List[int] = Field(default_factory=list)
+    time_step: Optional[str] = "3 hours"
+    time_interval_hours: Optional[float] = 3.0
+    total_timestamps: int = 0
     grid_resolution_deg: Optional[float] = None
     domain: Optional[str] = "Indian Ocean & Adjacent Seas"
+
+
+class HYCOMTimestampsResponse(BaseModel):
+    source: str = "INCOIS / HYCOM Consortium"
+    dataset_id: str
+    earliest: str
+    latest: str
+    available_years: List[int]
+    time_step: str = "3 hours"
+    total_timestamps: int
+    dates: Optional[List[str]] = None
+    timestamps: Optional[List[str]] = None
 
 
 class ModelObservationComparisonItem(BaseModel):

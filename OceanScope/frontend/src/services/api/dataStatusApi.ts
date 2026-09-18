@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '../../config/appConfig';
+import { safeFetchJson } from '../../utils/safeFetch';
 
 export interface SystemDataStatus {
   status: 'connected' | 'degraded' | 'offline';
@@ -28,11 +29,7 @@ export interface SystemDataStatus {
 
 export async function fetchDataStatus(): Promise<SystemDataStatus> {
   try {
-    const res = await fetch(`${APP_CONFIG.api.baseUrl}/data/status`);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    return await res.json();
+    return await safeFetchJson<SystemDataStatus>(`${APP_CONFIG.api.baseUrl}/data/status`);
   } catch (err) {
     console.warn('Using fallback data status due to network offline', err);
     return {
@@ -63,13 +60,9 @@ export async function fetchDataStatus(): Promise<SystemDataStatus> {
 
 export async function triggerDataRefresh(): Promise<SystemDataStatus> {
   try {
-    const res = await fetch(`${APP_CONFIG.api.baseUrl}/data/refresh`, {
+    return await safeFetchJson<SystemDataStatus>(`${APP_CONFIG.api.baseUrl}/data/refresh`, {
       method: 'POST',
     });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    return await res.json();
   } catch (err) {
     console.warn('Data refresh fell back locally', err);
     return await fetchDataStatus();

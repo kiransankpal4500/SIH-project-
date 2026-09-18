@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '../../config/appConfig';
+import { safeFetchJson } from '../../utils/safeFetch';
 
 export interface ArgoObservationItem {
   platform_number: string;
@@ -74,11 +75,9 @@ export async function getArgoObservations(
     params.append('platform_number', platformNumber);
   }
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/observations/argo?${params.toString()}`);
-  if (!res.ok) {
-    throw new Error(`INCOIS API request failed: ${res.statusText}`);
-  }
-  return res.json();
+  return safeFetchJson<ArgoObservationResponse>(
+    `${APP_CONFIG.api.baseUrl}/observations/argo?${params.toString()}`
+  );
 }
 
 export async function getArgoProfile(
@@ -90,9 +89,7 @@ export async function getArgoProfile(
     cycle_number: cycleNumber.toString(),
   });
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/observations/argo/profile?${params.toString()}`);
-  if (!res.ok) {
-    throw new Error(`INCOIS Profile request failed: ${res.statusText}`);
-  }
-  return res.json();
+  return safeFetchJson<ArgoProfileResponse>(
+    `${APP_CONFIG.api.baseUrl}/observations/argo/profile?${params.toString()}`
+  );
 }

@@ -57,14 +57,14 @@
   - Live data status & refresh endpoints: `GET /api/v1/data/status` and `POST /api/v1/data/refresh`
   - Operational telemetry card (`DataStatusCard`) on dashboard & explorer showing live INCOIS connection status, latest observation timestamps, and a non-reloading "Refresh Data" action button
 - [x] **Step 14: Scientific Data Quality Control (QC) & Validation Engine**
-  - Centralized scientific QC module ([`backend/app/core/quality_control.py`](file:///c:/Users/user/Desktop/SIH/SIH-project-/OceanScope/backend/app/core/quality_control.py)) with IOC/WMO Argo QC flag standards
+  - Centralized scientific QC module ([`backend/app/core/quality_control.py`](backend/app/core/quality_control.py)) with IOC/WMO Argo QC flag standards
   - Strict physical limit thresholds (Temp −2.5 to 40.0°C, Salinity 0.0 to 45.0 PSU) and sentinel fill value filtering
   - Standardized canonical units map across all physical parameters
   - Paired-observation statistical metric calculations (Bias, RMSE, MAE) strictly excluding NaNs
-  - Comprehensive documentation in [`docs/data/quality_control.md`](file:///c:/Users/user/Desktop/SIH/SIH-project-/OceanScope/docs/data/quality_control.md)
+  - Comprehensive documentation in [`docs/data/quality_control.md`](docs/data/quality_control.md)
   - 90-test automated validation suite (`scripts/test_quality_control.py` — 100% PASSED)
 - [x] **Step 15: Final Technical Hardening, Security & Containerization**
-  - Production configuration via environment variables ([`.env.example`](file:///c:/Users/user/Desktop/SIH/SIH-project-/OceanScope/.env.example))
+  - Production configuration via environment variables ([`.env.example`](.env.example))
   - Global unhandled exception shielding and CORS origin restriction
   - Zero hardcoded secrets / credentials verified
   - Multi-stage Docker deployment with `Dockerfile` (frontend/backend) and `docker-compose.yml`

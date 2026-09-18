@@ -42,7 +42,19 @@ class Settings:
     HTTP_TIMEOUT_SECONDS: int = int(os.getenv("HTTP_TIMEOUT_SECONDS", "10"))
     CACHE_EXPIRATION_SECONDS: int = int(os.getenv("CACHE_EXPIRATION_SECONDS", "600"))
 
-    # HYCOM NetCDF Model Storage Configuration
+    # HYCOM Model Storage & Remote Data Access Configuration
+    HYCOM_DATA_SOURCE: str = os.getenv("HYCOM_DATA_SOURCE", "remote").lower()
+    # Historical archive: GLBy0.08/expt_93.0 (Dec 2018 – Sep 2024)
+    HYCOM_REMOTE_OPENDAP_URL: str = os.getenv(
+        "HYCOM_REMOTE_OPENDAP_URL", "https://tds.hycom.org/thredds/dodsC/GLBy0.08/expt_93.0"
+    )
+    HYCOM_DATASET_ID: str = os.getenv("HYCOM_DATASET_ID", "GLBy0.08_expt_93.0")
+    # Current/recent data: ESPC-D-V02 per-variable per-year archives (Aug 2024 – Present)
+    HYCOM_CURRENT_OPENDAP_BASE: str = os.getenv(
+        "HYCOM_CURRENT_OPENDAP_BASE", "https://tds.hycom.org/thredds/dodsC/ESPC-D-V02"
+    )
+    HYCOM_CURRENT_DATASET_ID: str = os.getenv("HYCOM_CURRENT_DATASET_ID", "ESPC-D-V02")
+    HYCOM_REMOTE_TIMEOUT_SECONDS: int = int(os.getenv("HYCOM_REMOTE_TIMEOUT_SECONDS", "15"))
     # In production container, default to persistent volume mount /data/hycom
     HYCOM_DATA_DIRECTORY: str = os.getenv(
         "HYCOM_DATA_DIRECTORY",

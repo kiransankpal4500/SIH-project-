@@ -5,9 +5,10 @@ Provides lazy regional subset queries for temperature, salinity, currents, MLD, 
 """
 
 import math
+import time
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 
 import copernicusmarine
@@ -42,6 +43,7 @@ class CopernicusMarineService:
     def __init__(self):
         self.username = settings.COPERNICUSMARINE_SERVICE_USERNAME
         self.password = settings.COPERNICUSMARINE_SERVICE_PASSWORD
+        self._dataset_cache: Dict[str, Tuple[float, Any]] = {}
 
     def _generate_cache_key(self, prefix: str, **kwargs) -> str:
         items = [f"{k}={v}" for k, v in sorted(kwargs.items())]
@@ -91,62 +93,91 @@ class CopernicusMarineService:
         lon: float,
         depth: float = 0.0,
         time_str: Optional[str] = None,
-        buffer_deg: float = 0.4,
+        buffer_deg: float = 0.05,
+        variables: Optional[List[str]] = None,
+        is_profile: bool = False,
     ):
         """
-        Opens a regional subset around (lat, lon) using copernicusmarine.
+        Opens an optimized minimal regional subset around (lat, lon) using copernicusmarine.
+        Applies in-memory dataset caching, focused spatial window, variable filtering,
+        depth bounding, and date clamping.
         """
         min_lon = max(-180.0, lon - buffer_deg)
         max_lon = min(180.0, lon + buffer_deg)
         min_lat = max(-90.0, lat - buffer_deg)
         max_lat = min(90.0, lat + buffer_deg)
 
-        # Prefer Near Real Time dataset, fall back to multi-year if older date
+        var_suffix = ",".join(sorted(variables)) if variables else "all"
+        cache_key = f"{round(lat, 2)}_{round(lon, 2)}_{'prof' if is_profile else round(depth, -1)}_{time_str or 'latest'}_{var_suffix}"
+        now_ts = time.time()
+        if cache_key in self._dataset_cache:
+            created_at, cached_entry = self._dataset_cache[cache_key]
+            if now_ts - created_at < 600:
+                return cached_entry
+
         dataset_id = COPERNICUS_NRT_DATASET
         start_dt = "2024-05-01T00:00:00"
         end_dt = "2024-05-01T23:59:59"
 
+        now_dt = datetime.now(timezone.utc)
         if time_str:
             try:
                 dt_prefix = time_str[:10]
-                start_dt = f"{dt_prefix}T00:00:00"
-                end_dt = f"{dt_prefix}T23:59:59"
-                if int(dt_prefix[:4]) < 2024:
+                req_year = int(dt_prefix[:4])
+                # If requested year is in the future, clamp to recent UTC date
+                if req_year > now_dt.year or (req_year == now_dt.year and dt_prefix > now_dt.strftime("%Y-%m-%d")):
+                    clamped_date = now_dt.strftime("%Y-%m-%d")
+                    start_dt = f"{clamped_date}T00:00:00"
+                    end_dt = f"{clamped_date}T23:59:59"
+                elif req_year < 2024:
                     dataset_id = COPERNICUS_MY_DATASET
+                    start_dt = f"{dt_prefix}T00:00:00"
+                    end_dt = f"{dt_prefix}T23:59:59"
+                else:
+                    start_dt = f"{dt_prefix}T00:00:00"
+                    end_dt = f"{dt_prefix}T23:59:59"
             except Exception:
                 pass
 
-        try:
-            ds = copernicusmarine.open_dataset(
-                dataset_id=dataset_id,
-                username=self.username,
-                password=self.password,
-                minimum_longitude=min_lon,
-                maximum_longitude=max_lon,
-                minimum_latitude=min_lat,
-                maximum_latitude=max_lat,
-                minimum_depth=0.0,
-                maximum_depth=min(1000.0, max(200.0, depth + 50.0)),
-                start_datetime=start_dt,
-                end_datetime=end_dt,
-            )
-            return ds, dataset_id
-        except Exception as e:
-            logger.warning(f"Failed opening {dataset_id} ({e}), trying multi-year dataset {COPERNICUS_MY_DATASET}")
-            ds = copernicusmarine.open_dataset(
-                dataset_id=COPERNICUS_MY_DATASET,
-                username=self.username,
-                password=self.password,
-                minimum_longitude=min_lon,
-                maximum_longitude=max_lon,
-                minimum_latitude=min_lat,
-                maximum_latitude=max_lat,
-                minimum_depth=0.0,
-                maximum_depth=min(1000.0, max(200.0, depth + 50.0)),
-                start_datetime="2023-06-01T00:00:00",
-                end_datetime="2023-06-01T23:59:59",
-            )
-            return ds, COPERNICUS_MY_DATASET
+        # Precise depth bounding for performance
+        min_d = 0.0 if is_profile else max(0.0, depth - 5.0)
+        max_d = 1000.0 if is_profile else min(1000.0, max(5.0, depth + 5.0))
+
+        open_kwargs: Dict[str, Any] = {
+            "dataset_id": dataset_id,
+            "username": self.username,
+            "password": self.password,
+            "minimum_longitude": min_lon,
+            "maximum_longitude": max_lon,
+            "minimum_latitude": min_lat,
+            "maximum_latitude": max_lat,
+            "minimum_depth": min_d,
+            "maximum_depth": max_d,
+        }
+        if start_dt and end_dt:
+            open_kwargs["start_datetime"] = start_dt
+            open_kwargs["end_datetime"] = end_dt
+        if variables:
+            open_kwargs["variables"] = variables
+
+        # Attempt opening with short retry
+        for attempt in range(3):
+            try:
+                ds = copernicusmarine.open_dataset(**open_kwargs)
+                res = (ds, dataset_id)
+                self._dataset_cache[cache_key] = (now_ts, res)
+                return res
+            except Exception as e:
+                if attempt == 2:
+                    logger.warning(f"Failed opening {dataset_id} after {attempt + 1} attempts ({e}), trying multi-year dataset {COPERNICUS_MY_DATASET}")
+                    open_kwargs["dataset_id"] = COPERNICUS_MY_DATASET
+                    open_kwargs["start_datetime"] = "2023-06-01T00:00:00"
+                    open_kwargs["end_datetime"] = "2023-06-01T23:59:59"
+                    ds = copernicusmarine.open_dataset(**open_kwargs)
+                    res = (ds, COPERNICUS_MY_DATASET)
+                    self._dataset_cache[cache_key] = (now_ts, res)
+                    return res
+                time.sleep(0.4 * (2 ** attempt))
 
     def get_point(
         self,
@@ -174,34 +205,41 @@ class CopernicusMarineService:
         var_info = VARIABLES_MAP.get(var_key, VARIABLES_MAP["temperature"])
         cmems_var = var_info["cmems_var"]
 
+        requested_depth = depth
+        # Nearest depth coordinate handling: MULTIOBS max depth is 1000m
+        clamped_depth = min(1000.0, max(0.0, depth))
+
         try:
-            ds, dataset_id = self._open_subset(lat, lon, depth=depth, time_str=time)
+            ds, dataset_id = self._open_subset(lat, lon, depth=clamped_depth, time_str=time, variables=[cmems_var])
             sel_point = ds.sel(latitude=lat, longitude=lon, method="nearest")
             time_val = str(ds.time.values[0]) if len(ds.time.values) > 0 else (time or "2024-05-01T00:00:00Z")
 
             if cmems_var in sel_point.data_vars:
                 var_array = sel_point[cmems_var].values.squeeze()
+                actual_depth = clamped_depth
                 if "depth" in sel_point[cmems_var].dims:
                     # Select closest depth index
                     depths_avail = [float(d) for d in sel_point.depth.values]
-                    closest_depth_idx = int(np.argmin(np.abs(np.array(depths_avail) - depth)))
+                    closest_depth_idx = int(np.argmin(np.abs(np.array(depths_avail) - clamped_depth)))
+                    actual_depth = depths_avail[closest_depth_idx]
                     val = float(var_array[closest_depth_idx]) if var_array.ndim > 0 else float(var_array)
                 else:
                     val = float(var_array)
                 
                 # Check for NaN (e.g. landmask)
                 if math.isnan(val):
-                    # Search within adjacent ocean cells in subset
-                    val_clean = self._extract_nearest_ocean_value(ds[cmems_var], lat, lon, depth)
+                    val_clean = self._extract_nearest_ocean_value(ds[cmems_var], lat, lon, clamped_depth)
                     val = val_clean
 
                 result = {
                     "latitude": lat,
                     "longitude": lon,
-                    "depth": depth,
+                    "depth": actual_depth,
+                    "requested_depth": requested_depth,
+                    "depth_note": f"Dataset nearest depth: {actual_depth}m" if actual_depth != requested_depth else None,
                     "time": time_val,
                     "variable": var_key,
-                    "value": round(val, 3) if val is not None else None,
+                    "value": round(val, 3) if (val is not None and not math.isnan(val)) else None,
                     "unit": var_info["unit"],
                     "label": var_info["label"],
                     "source": COPERNICUS_SOURCE_LABEL,
@@ -214,23 +252,8 @@ class CopernicusMarineService:
                 raise ValueError(f"Variable {cmems_var} not in dataset {dataset_id}")
 
         except Exception as e:
-            logger.error(f"Error querying Copernicus point ({lat}, {lon}): {e}")
-            # Fallback to physical baseline if needed
-            fallback_val = self._physical_baseline(var_key, lat, lon, depth)
-            result = {
-                "latitude": lat,
-                "longitude": lon,
-                "depth": depth,
-                "time": time or "2024-05-01T00:00:00Z",
-                "variable": var_key,
-                "value": round(fallback_val, 3),
-                "unit": var_info["unit"],
-                "label": var_info["label"],
-                "source": COPERNICUS_SOURCE_LABEL,
-                "dataset_id": COPERNICUS_NRT_DATASET,
-                "product_id": COPERNICUS_PRODUCT_ID,
-            }
-            return result
+            logger.error(f"Error querying Copernicus point ({lat}, {lon}, depth {requested_depth}m): {e}")
+            raise ValueError(f"Copernicus data unavailable for '{var_key}' at ({lat}, {lon}) depth {requested_depth}m: {str(e)}")
 
     def get_profile(
         self,
@@ -252,7 +275,7 @@ class CopernicusMarineService:
             return cached
 
         try:
-            ds, dataset_id = self._open_subset(lat, lon, depth=500.0, time_str=time)
+            ds, dataset_id = self._open_subset(lat, lon, time_str=time, variables=["to", "so"], is_profile=True)
             sel_point = ds.sel(latitude=lat, longitude=lon, method="nearest")
             time_val = str(ds.time.values[0]) if len(ds.time.values) > 0 else (time or "2024-05-01T00:00:00Z")
 
@@ -267,9 +290,9 @@ class CopernicusMarineService:
                 t = float(to_raw[d_idx]) if d_idx < len(to_raw) else None
                 s = float(so_raw[d_idx]) if d_idx < len(so_raw) else None
                 if t is not None and math.isnan(t):
-                    t = self._physical_baseline("temperature", lat, lon, d_m)
+                    t = None
                 if s is not None and math.isnan(s):
-                    s = self._physical_baseline("salinity", lat, lon, d_m)
+                    s = None
                 temp_profile.append(round(t, 2) if t is not None else None)
                 sal_profile.append(round(s, 2) if s is not None else None)
 
@@ -291,22 +314,7 @@ class CopernicusMarineService:
 
         except Exception as e:
             logger.error(f"Error querying Copernicus profile ({lat}, {lon}): {e}")
-            depths = AVAILABLE_DEPTH_LEVELS[:15]
-            temp_profile = [round(self._physical_baseline("temperature", lat, lon, d), 2) for d in depths]
-            sal_profile = [round(self._physical_baseline("salinity", lat, lon, d), 2) for d in depths]
-            return {
-                "latitude": lat,
-                "longitude": lon,
-                "time": time or "2024-05-01T00:00:00Z",
-                "depths": depths,
-                "temperature": temp_profile,
-                "salinity": sal_profile,
-                "temperature_unit": "°C",
-                "salinity_unit": "PSU",
-                "source": COPERNICUS_SOURCE_LABEL,
-                "dataset_id": COPERNICUS_NRT_DATASET,
-                "product_id": COPERNICUS_PRODUCT_ID,
-            }
+            raise ValueError(f"Copernicus profile soundings unavailable at ({lat}, {lon}): {str(e)}")
 
     def get_current(
         self,
@@ -317,22 +325,21 @@ class CopernicusMarineService:
     ) -> Dict[str, Any]:
         """
         Query eastward (ugo) and northward (vgo) current components and compute speed and heading.
-        speed = sqrt(ugo^2 + vgo^2)
-        direction = oceanographic direction where current is flowing to (degrees true).
         """
         lat = round(float(latitude), 4)
         lon = round(float(longitude), 4)
-        depth = float(depth)
+        requested_depth = float(depth)
+        clamped_depth = min(1000.0, max(0.0, depth))
 
         cache_key = self._generate_cache_key(
-            "copernicus_current", lat=lat, lon=lon, depth=depth, time=time or "latest"
+            "copernicus_current", lat=lat, lon=lon, depth=requested_depth, time=time or "latest"
         )
         cached = global_query_cache.get(cache_key)
         if cached:
             return cached
 
         try:
-            ds, dataset_id = self._open_subset(lat, lon, depth=depth, time_str=time)
+            ds, dataset_id = self._open_subset(lat, lon, depth=clamped_depth, time_str=time, variables=["ugo", "vgo"])
             sel_point = ds.sel(latitude=lat, longitude=lon, method="nearest")
             time_val = str(ds.time.values[0]) if len(ds.time.values) > 0 else (time or "2024-05-01T00:00:00Z")
 
@@ -347,17 +354,16 @@ class CopernicusMarineService:
                 vgo = float(vgo_raw)
 
             if math.isnan(ugo) or math.isnan(vgo):
-                ugo = 0.05
-                vgo = -0.12
+                raise ValueError("Current velocity values are NaN for this grid cell")
 
             speed = math.sqrt(ugo**2 + vgo**2)
-            # Oceanographic heading (degrees from North)
             direction_deg = (math.atan2(ugo, vgo) * 180.0 / math.pi + 360.0) % 360.0
 
             result = {
                 "latitude": lat,
                 "longitude": lon,
-                "depth": depth,
+                "depth": clamped_depth,
+                "requested_depth": requested_depth,
                 "time": time_val,
                 "ugo": round(ugo, 4),
                 "vgo": round(vgo, 4),
@@ -372,25 +378,8 @@ class CopernicusMarineService:
             return result
 
         except Exception as e:
-            logger.error(f"Error querying Copernicus current ({lat}, {lon}): {e}")
-            ugo = 0.08
-            vgo = -0.15
-            speed = math.sqrt(ugo**2 + vgo**2)
-            direction_deg = (math.atan2(ugo, vgo) * 180.0 / math.pi + 360.0) % 360.0
-            return {
-                "latitude": lat,
-                "longitude": lon,
-                "depth": depth,
-                "time": time or "2024-05-01T00:00:00Z",
-                "ugo": round(ugo, 4),
-                "vgo": round(vgo, 4),
-                "speed": round(speed, 3),
-                "direction_degrees": round(direction_deg, 1),
-                "unit": "m/s",
-                "source": COPERNICUS_SOURCE_LABEL,
-                "dataset_id": COPERNICUS_NRT_DATASET,
-                "product_id": COPERNICUS_PRODUCT_ID,
-            }
+            logger.error(f"Error querying Copernicus current ({lat}, {lon}, depth {requested_depth}m): {e}")
+            raise ValueError(f"Copernicus current data unavailable at ({lat}, {lon}) depth {requested_depth}m: {str(e)}")
 
     def _extract_nearest_ocean_value(
         self, data_array, lat: float, lon: float, depth: float

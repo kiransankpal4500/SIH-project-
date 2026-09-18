@@ -27,7 +27,6 @@ interface FishInstance {
 interface MarineLifeLayerProps {
   species: MarineLifeSpecies[];
   maxDepth: number;         // seabed depth in scene units (positive = down)
-  verticalExaggeration: number;
   selectedDepth: number;    // currently selected depth in meters
   fishCount?: number;       // max fish to render (default 10)
 }
@@ -45,11 +44,11 @@ function lerp(a: number, b: number, t: number): number {
  * Map a real-world depth (meters) to scene Y coordinate.
  * Surface = 0, Seabed = -maxSceneDepth
  */
-function depthToSceneY(depthM: number, maxDepthM: number, vExag: number): number {
+function depthToSceneY(depthM: number, maxDepthM: number): number {
   if (maxDepthM <= 0) return 0;
   const normalised = clamp(depthM / maxDepthM, 0, 1);
-  // Scene spans from Y=0 (surface) to Y = -2*vExag (seabed)
-  return -normalised * 2.0 * vExag;
+  // Scene spans from Y=0 (surface) to Y = -2.0 (seabed)
+  return -normalised * 2.0;
 }
 
 // ─── Procedural fish geometry ───
@@ -90,10 +89,9 @@ function createTailGeometry(bodyLength: number): THREE.BufferGeometry {
 }
 
 // ─── Single Fish Component ───
-const Fish: React.FC<{ instance: FishInstance; maxDepthM: number; vExag: number }> = ({
+const Fish: React.FC<{ instance: FishInstance; maxDepthM: number }> = ({
   instance,
   maxDepthM,
-  vExag,
 }) => {
   const groupRef = useRef<THREE.Group>(null!);
   const tailRef = useRef<THREE.Mesh>(null!);
@@ -114,7 +112,7 @@ const Fish: React.FC<{ instance: FishInstance; maxDepthM: number; vExag: number 
 
   // Surface and seabed bounds in scene space
   const surfaceY = 0.02;
-  const seabedY = -2.0 * vExag + 0.15;  // safe margin above seabed
+  const seabedY = -2.0 + 0.15;  // safe margin above seabed
   const chunkHalfWidth = 1.6;
 
   useFrame((_, delta) => {
@@ -209,10 +207,9 @@ const Fish: React.FC<{ instance: FishInstance; maxDepthM: number; vExag: number 
 };
 
 // ─── Underwater Particles ───
-const UnderwaterParticles: React.FC<{ count?: number; depth: number; vExag: number }> = ({
+const UnderwaterParticles: React.FC<{ count?: number; depth: number }> = ({
   count = 60,
   depth,
-  vExag,
 }) => {
   const pointsRef = useRef<THREE.Points>(null!);
 
@@ -220,11 +217,11 @@ const UnderwaterParticles: React.FC<{ count?: number; depth: number; vExag: numb
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       arr[i * 3] = (Math.random() - 0.5) * 3.2;
-      arr[i * 3 + 1] = -Math.random() * 2.0 * vExag;
+      arr[i * 3 + 1] = -Math.random() * 2.0;
       arr[i * 3 + 2] = (Math.random() - 0.5) * 3.2;
     }
     return arr;
-  }, [count, vExag]);
+  }, [count]);
 
   // Opacity decreases with depth
   const opacity = clamp(1.0 - depth / 2000, 0.08, 0.35);
@@ -238,7 +235,7 @@ const UnderwaterParticles: React.FC<{ count?: number; depth: number; vExag: numb
       pos.array[i * 3 + 1] += delta * 0.015 * (0.5 + Math.random() * 0.5);
       // Wrap vertically
       if (pos.array[i * 3 + 1] > 0.05) {
-        pos.array[i * 3 + 1] = -2.0 * vExag;
+        pos.array[i * 3 + 1] = -2.0;
       }
       // Slight horizontal wander
       pos.array[i * 3] += (Math.random() - 0.5) * delta * 0.02;
@@ -272,7 +269,6 @@ const UnderwaterParticles: React.FC<{ count?: number; depth: number; vExag: numb
 const MarineLifeLayer: React.FC<MarineLifeLayerProps> = ({
   species,
   maxDepth,
-  verticalExaggeration,
   selectedDepth,
   fishCount = 10,
 }) => {
@@ -295,13 +291,13 @@ const MarineLifeLayer: React.FC<MarineLifeLayerProps> = ({
           sp.minimum_depth,
           Math.min(sp.maximum_depth, maxDepth)
         );
-        const yPos = depthToSceneY(fishDepthM, maxDepth, verticalExaggeration);
+        const yPos = depthToSceneY(fishDepthM, maxDepth);
 
         instances.push({
           species: sp,
           position: new THREE.Vector3(
             (Math.random() - 0.5) * chunkHalf * 2,
-            clamp(yPos, -2.0 * verticalExaggeration + 0.15, 0.02),
+            clamp(yPos, -2.0 + 0.15, 0.02),
             (Math.random() - 0.5) * chunkHalf * 2
           ),
           velocity: new THREE.Vector3(0, 0, 0),
@@ -316,7 +312,7 @@ const MarineLifeLayer: React.FC<MarineLifeLayerProps> = ({
       }
     }
     return instances;
-  }, [species, selectedDepth, maxDepth, verticalExaggeration, fishCount]);
+  }, [species, selectedDepth, maxDepth, fishCount]);
 
   if (fishInstances.length === 0) return null;
 
@@ -326,7 +322,6 @@ const MarineLifeLayer: React.FC<MarineLifeLayerProps> = ({
       <UnderwaterParticles
         count={50}
         depth={selectedDepth}
-        vExag={verticalExaggeration}
       />
 
       {/* Animated fish */}
@@ -335,7 +330,6 @@ const MarineLifeLayer: React.FC<MarineLifeLayerProps> = ({
           key={`fish-${idx}-${inst.species.scientific_name}`}
           instance={inst}
           maxDepthM={maxDepth}
-          vExag={verticalExaggeration}
         />
       ))}
 

@@ -1,3 +1,8 @@
+/**
+ * 3D Ocean Sphere Surface
+ * Maps NASA Blue Marble high-res textures, bathymetric colormaps, and click interaction raycasting.
+ */
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { GLOBE_RADIUS } from '../utils/threeMath';

@@ -1,3 +1,8 @@
+/**
+ * OceanContext Global State Manager
+ * Centralizes state for 3D globe visualization, HYCOM/Copernicus models, Argo telemetry, and risk indicators.
+ */
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { OceanVariable, LocationRiskResponse, RegionalRiskHotspot } from '../types';
 import { APP_CONFIG } from '../config/appConfig';
@@ -16,6 +21,7 @@ import {
   HycomModelPoint,
 } from '../services/hycomApi';
 import { riskApiClient } from '../services/riskApi';
+import { safeFetchJson } from '../utils/safeFetch';
 
 interface OceanState {
   selectedVariable: OceanVariable;
@@ -39,6 +45,14 @@ interface OceanState {
   // Time & Depth Animation State
   selectedTimestamp: string;
   availableTimestamps: string[];
+  availableYears: number[];
+  availableDates: string[];
+  availableTimes: string[];
+  selectedYear: number;
+  selectedDate: string;
+  earliestTime: string | null;
+  latestTime: string | null;
+  temporalLoading: boolean;
   isPlaying: boolean;
   playbackSpeed: number; // 1 = normal, 2 = 2x, etc.
   // Ocean Risk & Disaster Decision-Support State
@@ -64,6 +78,10 @@ interface OceanContextType {
   fetchHycomPoint: (lat: number, lon: number, depth?: number, variable?: string, time?: string) => Promise<void>;
   setDisplayMode: (mode: 'OBSERVATION' | 'MODEL' | 'COMPARISON' | 'RISK') => void;
   setSelectedTimestamp: (timestamp: string) => void;
+  setSelectedYear: (year: number) => Promise<void>;
+  setSelectedDate: (date: string) => Promise<void>;
+  setYearDateTime: (year: number, date: string, timeIso: string) => Promise<void>;
+  loadLatestTimestamp: () => Promise<void>;
   setIsPlaying: (isPlaying: boolean) => void;
   setPlaybackSpeed: (speed: number) => void;
   nextTimestamp: () => void;
@@ -75,9 +93,14 @@ interface OceanContextType {
 }
 
 const DEFAULT_TIMESTAMPS = [
-  '2026-08-28T06:00:00Z',
-  '2026-08-28T12:00:00Z',
-  '2026-08-28T18:00:00Z',
+  '2019-08-15T00:00:00Z',
+  '2019-08-15T03:00:00Z',
+  '2019-08-15T06:00:00Z',
+  '2019-08-15T09:00:00Z',
+  '2019-08-15T12:00:00Z',
+  '2019-08-15T15:00:00Z',
+  '2019-08-15T18:00:00Z',
+  '2019-08-15T21:00:00Z',
 ];
 
 const initialOceanState: OceanState = {
@@ -100,8 +123,16 @@ const initialOceanState: OceanState = {
   hycomError: null,
   displayMode: 'OBSERVATION',
   // Time Animation
-  selectedTimestamp: '2026-08-28T06:00:00Z',
+  selectedTimestamp: '2019-08-15T12:00:00Z',
   availableTimestamps: DEFAULT_TIMESTAMPS,
+  availableYears: [2018, 2019, 2020],
+  availableDates: ['2019-08-15'],
+  availableTimes: DEFAULT_TIMESTAMPS,
+  selectedYear: 2019,
+  selectedDate: '2019-08-15',
+  earliestTime: '2018-01-01T12:00:00Z',
+  latestTime: '2020-02-19T09:00:00Z',
+  temporalLoading: false,
   isPlaying: false,
   playbackSpeed: 1,
   // Ocean Risk Decision-Support State
@@ -142,7 +173,131 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const setSelectedTimestamp = (timestamp: string) => {
-    setState((prev) => ({ ...prev, selectedTimestamp: timestamp }));
+    const year = parseInt(timestamp.slice(0, 4), 10) || state.selectedYear;
+    const date = timestamp.slice(0, 10) || state.selectedDate;
+    setState((prev) => ({
+      ...prev,
+      selectedTimestamp: timestamp,
+      selectedYear: year,
+      selectedDate: date,
+    }));
+  };
+
+  const setSelectedYear = async (year: number) => {
+    try {
+      setState((prev) => ({ ...prev, temporalLoading: true }));
+      const dateData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?year=${year}`);
+      const dates: string[] = dateData.dates || [];
+      if (dates.length === 0) return;
+
+      // Keep same month-day if possible, else pick middle or first date
+      const curMonthDay = state.selectedDate.slice(5);
+      const matchedDate = dates.find((d) => d.endsWith(curMonthDay)) || dates[Math.floor(dates.length / 2)] || dates[0];
+
+      // Load timestamps for this matched date
+      let timestamps: string[] = [];
+      try {
+        const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${matchedDate}`);
+        timestamps = tsData.timestamps || [];
+      } catch {
+        timestamps = [];
+      }
+      const newTs = timestamps.includes(state.selectedTimestamp)
+        ? state.selectedTimestamp
+        : timestamps[Math.floor(timestamps.length / 2)] || timestamps[0] || `${matchedDate}T12:00:00Z`;
+
+      setState((prev) => ({
+        ...prev,
+        selectedYear: year,
+        availableDates: dates,
+        selectedDate: matchedDate,
+        availableTimes: timestamps,
+        availableTimestamps: timestamps.length > 0 ? timestamps : prev.availableTimestamps,
+        selectedTimestamp: newTs,
+        temporalLoading: false,
+      }));
+    } catch (err) {
+      console.warn('Failed to change HYCOM year', err);
+      setState((prev) => ({ ...prev, temporalLoading: false }));
+    }
+  };
+
+  const setSelectedDate = async (date: string) => {
+    try {
+      setState((prev) => ({ ...prev, temporalLoading: true }));
+      const year = parseInt(date.slice(0, 4), 10) || state.selectedYear;
+      const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${date}`);
+      const timestamps: string[] = tsData.timestamps || [];
+      if (timestamps.length === 0) return;
+
+      // Try matching the current time of day (e.g. 12:00:00Z)
+      const curTimeOfDay = state.selectedTimestamp.includes('T') ? state.selectedTimestamp.split('T')[1] : '12:00:00Z';
+      const matchedTs = timestamps.find((ts) => ts.endsWith(curTimeOfDay)) || timestamps[Math.floor(timestamps.length / 2)] || timestamps[0];
+
+      setState((prev) => ({
+        ...prev,
+        selectedYear: year,
+        selectedDate: date,
+        availableTimes: timestamps,
+        availableTimestamps: timestamps,
+        selectedTimestamp: matchedTs,
+        temporalLoading: false,
+      }));
+    } catch (err) {
+      console.warn('Failed to change HYCOM date', err);
+      setState((prev) => ({ ...prev, temporalLoading: false }));
+    }
+  };
+
+  const setYearDateTime = async (year: number, date: string, timeIso: string) => {
+    setState((prev) => ({
+      ...prev,
+      selectedYear: year,
+      selectedDate: date,
+      selectedTimestamp: timeIso,
+    }));
+  };
+
+  const loadLatestTimestamp = async () => {
+    try {
+      setState((prev) => ({ ...prev, temporalLoading: true }));
+      const meta = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps`);
+      const latestIso: string = meta.latest;
+      const year = parseInt(latestIso.slice(0, 4), 10);
+      const date = latestIso.slice(0, 10);
+
+      // Fetch dates for year
+      let dates: string[] = [];
+      try {
+        const dateData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?year=${year}`);
+        dates = dateData.dates || [];
+      } catch {
+        dates = [];
+      }
+
+      // Fetch timestamps for that date
+      let timestamps: string[] = [];
+      try {
+        const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${date}`);
+        timestamps = tsData.timestamps || [];
+      } catch {
+        timestamps = [];
+      }
+
+      setState((prev) => ({
+        ...prev,
+        selectedYear: year,
+        availableDates: dates,
+        selectedDate: date,
+        availableTimes: timestamps,
+        availableTimestamps: timestamps.length > 0 ? timestamps : prev.availableTimestamps,
+        selectedTimestamp: latestIso,
+        temporalLoading: false,
+      }));
+    } catch (err) {
+      console.warn('Failed to load latest HYCOM timestamp', err);
+      setState((prev) => ({ ...prev, temporalLoading: false }));
+    }
   };
 
   const setIsPlaying = (isPlaying: boolean) => {
@@ -179,23 +334,48 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => clearInterval(timer);
   }, [state.isPlaying, state.playbackSpeed, state.availableTimestamps]);
 
-  // Load HYCOM Metadata to dynamically get real available timestamps
+  // Load HYCOM Metadata & Initial Temporal Coverage on mount
   useEffect(() => {
     const initHycomMeta = async () => {
       try {
-        const metaRes = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/metadata`);
-        if (metaRes.ok) {
-          const meta = await metaRes.json();
-          if (meta.time_range && meta.time_range.length > 0) {
-            setState((prev) => ({
-              ...prev,
-              availableTimestamps: meta.time_range,
-              selectedTimestamp: meta.time_range[0],
-            }));
-          }
+        const meta = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps`);
+        const years: number[] = meta.available_years || [2018, 2019, 2020, 2021, 2022, 2023, 2024];
+        const initialYear = years.includes(2024) ? 2024 : years[years.length - 1];
+
+        // Fetch dates for the initial year
+        let dates: string[] = [];
+        try {
+          const dateData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?year=${initialYear}`);
+          dates = dateData.dates || [];
+        } catch {
+          dates = [];
         }
+        const initialDate = dates.includes(`${initialYear}-08-15`)
+          ? `${initialYear}-08-15`
+          : dates[dates.length - 1] || `${initialYear}-01-01`;
+
+        // Fetch timestamps for initial date
+        let timestamps: string[] = [];
+        try {
+          const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${initialDate}`);
+          timestamps = tsData.timestamps || [];
+        } catch {
+          timestamps = [];
+        }
+        const initialTs = timestamps.find((t) => t.includes('12:00:00')) || timestamps[timestamps.length - 1] || `${initialDate}T12:00:00Z`;
+
+        setState((prev) => ({
+          ...prev,
+          availableYears: years,
+          availableDates: dates,
+          availableTimes: timestamps,
+          availableTimestamps: timestamps.length > 0 ? timestamps : prev.availableTimestamps,
+          selectedYear: initialYear,
+          selectedDate: initialDate,
+          selectedTimestamp: initialTs,
+        }));
       } catch (err) {
-        console.warn('Could not load HYCOM metadata time range', err);
+        console.warn('Could not initialize HYCOM historical temporal metadata (backend may be offline or starting up)', err);
       }
     };
     initHycomMeta();
@@ -400,6 +580,10 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         fetchHycomPoint,
         setDisplayMode,
         setSelectedTimestamp,
+        setSelectedYear,
+        setSelectedDate,
+        setYearDateTime,
+        loadLatestTimestamp,
         setIsPlaying,
         setPlaybackSpeed,
         nextTimestamp,

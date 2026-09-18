@@ -3,6 +3,7 @@ Numerical Ocean Models Router
 Exposes INCOIS HYCOM model endpoints: point query, depth profile, current vectors, time-series, dataset metadata, cache statistics, and Argo comparison.
 """
 
+import asyncio
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Optional
 from app.schemas.ocean_schemas import OceanModelSchema
@@ -13,6 +14,7 @@ from app.schemas.hycom_schemas import (
     OceanModelMetadata,
     OceanModelTimeseriesResponse,
     ModelObservationComparisonResponse,
+    HYCOMTimestampsResponse,
 )
 from app.services.ocean_service import OceanService
 from app.services.hycom_service import hycom_service
@@ -36,6 +38,20 @@ async def get_hycom_metadata():
         return hycom_service.get_metadata()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Failed to load HYCOM metadata: {str(e)}")
+
+
+@router.get("/hycom/timestamps", response_model=HYCOMTimestampsResponse)
+async def get_hycom_timestamps(
+    year: Optional[int] = Query(None, description="Filter available dates by year e.g. 2019"),
+    date: Optional[str] = Query(None, description="Filter available timesteps by date e.g. 2019-08-15"),
+):
+    """Retrieve available years, dates, or exact timestamps from the active HYCOM model dataset."""
+    try:
+        return hycom_service.get_timestamps(year=year, date=date)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load HYCOM timestamps: {str(e)}")
 
 
 @router.get("/hycom/cache-stats")
@@ -211,17 +227,28 @@ async def get_copernicus_point(
     variable: str = Query("temperature", description="Variable: temperature, salinity, mld, height"),
     time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
 ):
-    """Query single point ocean data from Copernicus Marine MULTIOBS dataset."""
+    """Query single point ocean data from Copernicus Marine MULTIOBS dataset with threadpool execution and safety timeout."""
     try:
-        return copernicus_service.get_point(
-            latitude=latitude,
-            longitude=longitude,
-            depth=depth,
-            variable=variable,
-            time=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                copernicus_service.get_point,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                time=time,
+            ),
+            timeout=30.0,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 
 
 @router.get("/copernicus/profile")
@@ -230,15 +257,26 @@ async def get_copernicus_profile(
     longitude: float = Query(..., description="Longitude in degrees (-180 to 180)"),
     time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
 ):
-    """Query complete vertical soundings (Temperature & Salinity vs Depth) from Copernicus Marine."""
+    """Query complete vertical soundings (Temperature & Salinity vs Depth) from Copernicus Marine with threadpool execution and safety timeout."""
     try:
-        return copernicus_service.get_profile(
-            latitude=latitude,
-            longitude=longitude,
-            time=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                copernicus_service.get_profile,
+                latitude=latitude,
+                longitude=longitude,
+                time=time,
+            ),
+            timeout=30.0,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 
 
 @router.get("/copernicus/current")
@@ -248,14 +286,25 @@ async def get_copernicus_current(
     depth: float = Query(0.0, description="Depth level in meters"),
     time: Optional[str] = Query(None, description="ISO timestamp e.g. 2024-05-01T00:00:00Z"),
 ):
-    """Query eastward/northward current velocities, compute speed and direction from Copernicus Marine."""
+    """Query eastward/northward current velocities, compute speed and direction from Copernicus Marine with threadpool execution and safety timeout."""
     try:
-        return copernicus_service.get_current(
-            latitude=latitude,
-            longitude=longitude,
-            depth=depth,
-            time=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                copernicus_service.get_current,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                time=time,
+            ),
+            timeout=30.0,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Copernicus ocean data unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 

@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '../../config/appConfig';
+import { safeFetchJson } from '../../utils/safeFetch';
 
 /**
  * Base HTTP client for REST & WebSocket backend integration
@@ -15,17 +16,11 @@ export class ApiClient {
       throw new Error(`Mock mode active: Direct fetch skipped for ${endpoint}`);
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    return safeFetchJson<T>(`${this.baseUrl}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
       },
     });
-
-    if (!response.ok) {
-      throw new Error(`API Error ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json() as Promise<T>;
   }
 }
 

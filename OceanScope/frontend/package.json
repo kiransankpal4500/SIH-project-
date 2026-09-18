@@ -17,7 +17,8 @@
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",
     "recharts": "^2.15.1",
-    "three": "^0.174.0"
+    "three": "^0.174.0",
+    "firebase": "^11.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",

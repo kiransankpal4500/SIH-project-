@@ -1,3 +1,8 @@
+/**
+ * Disaster Indicator Card
+ * Renders individual regional hazard alerts, parameter anomalies, and detection timestamps.
+ */
+
 import React from 'react';
 import { DisasterIndicator, RegionalRiskHotspot } from '../../types';
 import { Badge } from '../common/Badge';

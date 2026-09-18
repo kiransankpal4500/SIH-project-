@@ -26,6 +26,7 @@ from app.schemas.hycom_schemas import (
     ModelObservationComparisonResponse,
 )
 from app.services.hycom_dataset_manager import hycom_dataset_manager, HYCOMDatasetManager
+from app.services.hycom_remote_service import hycom_remote_service
 
 logger = logging.getLogger("oceanscope.hycom_service")
 
@@ -37,6 +38,7 @@ class INCOISHYCOMService:
         cache: Optional[QueryCache] = None,
     ):
         self.dataset_manager = dataset_manager or hycom_dataset_manager
+        self.remote_service = hycom_remote_service
         self.cache = cache or global_query_cache
         self.cache_ttl = 300  # 5 minutes TTL
 
@@ -71,6 +73,12 @@ class INCOISHYCOMService:
 
     def get_dataset(self) -> Tuple[Optional[xr.Dataset], Optional[str]]:
         """Backwards-compatible helper returning the primary active xarray dataset."""
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            try:
+                return self.remote_service._get_dataset(), None
+            except Exception as e:
+                return None, f"Failed to connect to remote HYCOM: {e}"
+
         meta = self.dataset_manager.get_aggregate_metadata()
         if not meta.is_available or not meta.available_files:
             return None, "No HYCOM NetCDF datasets found in data directory."
@@ -87,6 +95,9 @@ class INCOISHYCOMService:
 
     def get_metadata(self) -> OceanModelMetadata:
         """Fetch aggregated multi-file metadata for all available INCOIS HYCOM datasets."""
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_metadata()
+
         t0 = time.time()
         cache_key = "hycom_meta_aggregate"
         cached = self.cache.get(cache_key)
@@ -99,6 +110,21 @@ class INCOISHYCOMService:
         logger.info(f"[CACHE MISS] HYCOM metadata aggregated ({meta.file_count} files) in {(time.time() - t0)*1000:.2f}ms")
         return meta
 
+    def get_timestamps(self, year: Optional[int] = None, date: Optional[str] = None):
+        """Retrieve temporal coverage, available years, dates, or timestamps."""
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_timestamps(year=year, date=date)
+        from app.schemas.hycom_schemas import HYCOMTimestampsResponse
+        meta = self.get_metadata()
+        return HYCOMTimestampsResponse(
+            dataset_id=meta.dataset,
+            earliest=meta.earliest_time or "2020-01-01T00:00:00Z",
+            latest=meta.latest_time or "2020-02-19T00:00:00Z",
+            available_years=[2020],
+            time_step="3 hours",
+            total_timestamps=len(meta.time_range),
+        )
+
     def get_point(
         self,
         latitude: float,
@@ -108,16 +134,26 @@ class INCOISHYCOMService:
         time_str: Optional[str] = None,
     ) -> OceanModelPoint:
         """
-        Extract value for a single point across the best matching NetCDF file.
+        Extract value for a single point across the best matching NetCDF file or remote OPeNDAP dataset.
         Uses nearest-neighbor coordinate slicing with query-level caching.
         """
         self.validate_coordinates(latitude, longitude, depth)
+
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_point(
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                time_str=time_str,
+            )
 
         t0 = time.time()
         cache_key = f"pt_{variable}_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{time_str or 'latest'}"
         cached = self.cache.get(cache_key)
         if cached:
             logger.debug(f"[CACHE HIT] Point query for {variable} at ({latitude}, {longitude}) in {(time.time() - t0)*1000:.2f}ms")
+            return cached
             return cached
 
         filepath, filename, sel_model_time, time_diff_hours, ds, var_mapping, dim_mapping = (
@@ -186,9 +222,16 @@ class INCOISHYCOMService:
     ) -> OceanModelProfile:
         """
         Fetch vertical temperature, salinity, and velocity profile for a coordinate.
-        Intelligently selects the best NetCDF file matching requested timestamp.
+        Intelligently selects the best NetCDF file matching requested timestamp or remote OPeNDAP dataset.
         """
         self.validate_coordinates(latitude, longitude, 0.0)
+
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_profile(
+                latitude=latitude,
+                longitude=longitude,
+                time_str=time_str,
+            )
 
         t0 = time.time()
         cache_key = f"prof_{latitude:.3f}_{longitude:.3f}_{time_str or 'latest'}"
@@ -279,6 +322,14 @@ class INCOISHYCOMService:
         """
         self.validate_coordinates(latitude, longitude, depth)
 
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_current(
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                time_str=time_str,
+            )
+
         t0 = time.time()
         cache_key = f"curr_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{time_str or 'latest'}"
         cached = self.cache.get(cache_key)
@@ -363,10 +414,20 @@ class INCOISHYCOMService:
         end_time: Optional[str] = None,
     ) -> OceanModelTimeseriesResponse:
         """
-        Extract time-series across all available HYCOM NetCDF files with caching.
+        Extract time-series across all available HYCOM NetCDF files or remote OPeNDAP dataset with caching.
         """
         self.validate_coordinates(latitude, longitude, depth)
         self.validate_timeseries_bounds(start_time, end_time)
+
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            return self.remote_service.get_timeseries(
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                start_time=start_time,
+                end_time=end_time,
+            )
 
         t0 = time.time()
         cache_key = f"ts_{variable}_{latitude:.3f}_{longitude:.3f}_{depth:.1f}_{start_time or 'min'}_{end_time or 'max'}"

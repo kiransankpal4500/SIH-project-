@@ -1,3 +1,8 @@
+/**
+ * OceanScope Frontend Application Shell
+ * Configures top-level routing, global providers, and core application layout.
+ */
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { OceanProvider } from './store/OceanContext';

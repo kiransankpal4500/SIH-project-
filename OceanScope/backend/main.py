@@ -25,11 +25,23 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS Middleware — configurable origins
-cors_origins = (
+# CORS Middleware — configurable origins including Firebase production
+configured_origins = (
     ["*"] if settings.CORS_ALLOWED_ORIGINS == "*"
     else [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
 )
+firebase_production_origins = [
+    "https://oceanscope-b3b88.web.app",
+    "https://oceanscope-b3b88.firebaseapp.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+]
+if "*" in configured_origins:
+    cors_origins = ["*"]
+else:
+    cors_origins = list(set(configured_origins + firebase_production_origins))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

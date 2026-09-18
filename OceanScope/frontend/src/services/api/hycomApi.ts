@@ -1,4 +1,10 @@
+/**
+ * INCOIS HYCOM Model API Service Client
+ * Handles point queries, depth profiles, current vectors, time-series, metadata, and Argo cross-validation.
+ */
+
 import { APP_CONFIG } from '../../config/appConfig';
+import { safeFetchJson } from '../../utils/safeFetch';
 
 // ============================
 // INCOIS HYCOM Model API Types
@@ -6,130 +12,146 @@ import { APP_CONFIG } from '../../config/appConfig';
 
 export interface HycomModelPoint {
   source: string;
-  model: string;
+  model?: string;
   dataset: string;
-  retrieved_at: string;
+  retrieved_at?: string;
   latitude: number;
   longitude: number;
   depth: number;
-  time: string;
-  model_time: string;
+  time?: string;
+  model_time?: string;
   variable: string;
-  value: number;
+  value: number | null;
   unit: string;
   selected_file?: string;
   time_difference_hours?: number;
+  is_live_data?: boolean;
+  is_fill_value?: boolean;
+  qc_status?: string;
 }
 
 export interface HycomProfileLevel {
   depth: number;
-  temperature: number | null;
-  salinity: number | null;
-  current_u: number | null;
-  current_v: number | null;
+  temperature?: number | null;
+  salinity?: number | null;
+  current_u?: number | null;
+  current_v?: number | null;
+  u?: number | null;
+  v?: number | null;
+  current_speed?: number | null;
+  current_direction?: number | null;
+  is_valid?: boolean;
 }
 
 export interface HycomModelProfile {
   source: string;
-  model: string;
+  model?: string;
   dataset: string;
-  retrieved_at: string;
+  retrieved_at?: string;
   latitude: number;
   longitude: number;
-  time: string;
-  model_time: string;
+  time?: string;
+  model_time?: string;
+  depth_count?: number;
+  units?: Record<string, string>;
+  is_live_data?: boolean;
   profile: HycomProfileLevel[];
-  selected_file?: string;
-  time_difference_hours?: number;
 }
 
 export interface HycomModelCurrent {
   source: string;
-  model: string;
+  model?: string;
   dataset: string;
-  retrieved_at: string;
+  retrieved_at?: string;
   latitude: number;
   longitude: number;
   depth: number;
-  time: string;
-  model_time: string;
-  u: number;
-  v: number;
-  speed: number;
-  direction: number;
+  time?: string;
+  model_time?: string;
+  u: number | null;
+  v: number | null;
+  speed: number | null;
+  direction?: number | null;
+  direction_degrees?: number | null;
   unit: string;
   selected_file?: string;
-  time_difference_hours?: number;
+  is_live_data?: boolean;
+  is_fill_value?: boolean;
+}
+
+export interface HycomModelMetadata {
+  source: string;
+  dataset?: string;
+  dataset_count?: number;
+  active_datasets?: string[];
+  total_timesteps?: number;
+  earliest_time?: string;
+  latest_time?: string;
+  latitude_range?: [number, number];
+  longitude_range?: [number, number];
+  depth_levels?: number[];
+  depth_levels_m?: number[];
+  variables?: any;
+  has_u_velocity?: boolean;
+  has_v_velocity?: boolean;
+  has_salinity?: boolean;
+  has_temperature?: boolean;
 }
 
 export interface HycomTimeseriesPoint {
   time: string;
   value: number | null;
-  selected_file?: string;
+  is_valid?: boolean;
 }
 
 export interface HycomTimeseriesResponse {
   source: string;
-  provider: string;
-  model: string;
-  dataset: string;
+  dataset?: string;
   latitude: number;
   longitude: number;
   depth: number;
   variable: string;
   unit: string;
-  start_time?: string;
-  end_time?: string;
-  count: number;
-  timeseries: HycomTimeseriesPoint[];
-}
-
-export interface HycomModelMetadata {
-  source: string;
-  model: string;
-  dataset: string;
-  filename: string;
-  available_files?: string[];
-  file_count?: number;
-  is_available: boolean;
-  dimensions: Record<string, number>;
-  discovered_variables: string[];
-  variables?: string[];
-  mapped_variables: Record<string, string>;
-  time_range: string[];
-  earliest_time?: string;
-  latest_time?: string;
-  depth_levels: number[];
-  available_depths?: number[];
-  lat_min: number;
-  lat_max: number;
-  latitude_range?: number[];
-  lon_min: number;
-  lon_max: number;
-  longitude_range?: number[];
+  timeseries?: HycomTimeseriesPoint[];
+  points?: HycomTimeseriesPoint[];
 }
 
 export interface ModelObsComparisonItem {
   depth: number;
-  model_temperature: number | null;
-  observed_temperature: number | null;
-  temperature_difference: number | null;
-  model_salinity: number | null;
-  observed_salinity: number | null;
-  salinity_difference: number | null;
-  qc_status?: string;
+  obs_temperature?: number | null;
+  model_temperature?: number | null;
+  temp_difference?: number | null;
+  obs_salinity?: number | null;
+  model_salinity?: number | null;
+  sal_difference?: number | null;
+  observed_temperature?: number | null;
+  temperature_difference?: number | null;
+  observed_salinity?: number | null;
+  salinity_difference?: number | null;
+  obs_qc_flag?: number;
+  observation_value?: number | null;
+  model_value?: number | null;
+  difference?: number | null;
+  abs_difference?: number | null;
   is_valid_pair?: boolean;
+  qc_status?: string;
 }
 
 export interface ModelObsComparisonResponse {
-  source_model: string;
-  source_observation: string;
+  source_model?: string;
+  source_observation?: string;
+  source?: string;
+  comparison_type?: string;
+  variable?: string;
+  unit?: string;
   platform_number: string;
   cycle_number: number;
-  observation_latitude: number;
-  observation_longitude: number;
-  model_latitude: number;
-  model_longitude: number;
+  observation_latitude?: number;
+  observation_longitude?: number;
+  model_latitude?: number;
+  model_longitude?: number;
+  latitude?: number;
+  longitude?: number;
   distance_km: number;
   observation_time: string;
   model_time: string;
@@ -140,13 +162,31 @@ export interface ModelObsComparisonResponse {
   missing_count?: number;
   qc_pass_count?: number;
   qc_fail_count?: number;
-  temp_bias: number | null;
-  temp_rmse: number | null;
-  temp_mae: number | null;
-  sal_bias: number | null;
-  sal_rmse: number | null;
-  sal_mae: number | null;
-  profile_comparison: ModelObsComparisonItem[];
+  temp_bias?: number | null;
+  temp_rmse?: number | null;
+  temp_mae?: number | null;
+  sal_bias?: number | null;
+  sal_rmse?: number | null;
+  sal_mae?: number | null;
+  bias?: number | null;
+  rmse?: number | null;
+  mae?: number | null;
+  profile_comparison?: ModelObsComparisonItem[];
+  levels?: ModelObsComparisonItem[];
+}
+
+export interface HYCOMTimestampsResponse {
+  source: string;
+  dataset: string;
+  total_timesteps: number;
+  available_years: number[];
+  selected_year?: number | null;
+  available_dates: string[];
+  selected_date?: string | null;
+  available_timesteps: string[];
+  earliest_time?: string;
+  latest_time?: string;
+  latest?: string;
 }
 
 // ============================
@@ -168,9 +208,9 @@ export async function getHycomPoint(
   });
   if (time) params.append('time', time);
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/point?${params.toString()}`);
-  if (!res.ok) throw new Error(`HYCOM point query failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<HycomModelPoint>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/point?${params.toString()}`
+  );
 }
 
 export async function getHycomProfile(
@@ -184,9 +224,9 @@ export async function getHycomProfile(
   });
   if (time) params.append('time', time);
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/profile?${params.toString()}`);
-  if (!res.ok) throw new Error(`HYCOM profile query failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<HycomModelProfile>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/profile?${params.toString()}`
+  );
 }
 
 export async function getHycomCurrent(
@@ -202,9 +242,9 @@ export async function getHycomCurrent(
   });
   if (time) params.append('time', time);
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/current?${params.toString()}`);
-  if (!res.ok) throw new Error(`HYCOM current query failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<HycomModelCurrent>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/current?${params.toString()}`
+  );
 }
 
 export async function getHycomTimeseries(
@@ -224,15 +264,29 @@ export async function getHycomTimeseries(
   if (startTime) params.append('start_time', startTime);
   if (endTime) params.append('end_time', endTime);
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/timeseries?${params.toString()}`);
-  if (!res.ok) throw new Error(`HYCOM timeseries query failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<HycomTimeseriesResponse>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/timeseries?${params.toString()}`
+  );
 }
 
 export async function getHycomMetadata(): Promise<HycomModelMetadata> {
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/metadata`);
-  if (!res.ok) throw new Error(`HYCOM metadata query failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<HycomModelMetadata>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/metadata`
+  );
+}
+
+export async function getHycomTimestamps(
+  year?: number,
+  date?: string
+): Promise<HYCOMTimestampsResponse> {
+  const params = new URLSearchParams();
+  if (year) params.append('year', year.toString());
+  if (date) params.append('date', date);
+
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return safeFetchJson<HYCOMTimestampsResponse>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/timestamps${qs}`
+  );
 }
 
 export async function getHycomArgoComparison(
@@ -244,7 +298,7 @@ export async function getHycomArgoComparison(
     cycle_number: cycleNumber.toString(),
   });
 
-  const res = await fetch(`${APP_CONFIG.api.baseUrl}/models/hycom/compare-argo?${params.toString()}`);
-  if (!res.ok) throw new Error(`HYCOM vs Argo comparison failed: ${res.statusText}`);
-  return res.json();
+  return safeFetchJson<ModelObsComparisonResponse>(
+    `${APP_CONFIG.api.baseUrl}/models/hycom/compare-argo?${params.toString()}`
+  );
 }

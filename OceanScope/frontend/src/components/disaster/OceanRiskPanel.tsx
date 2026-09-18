@@ -1,3 +1,8 @@
+/**
+ * Ocean Risk Decision-Support Panel
+ * Displays point-specific hazard classifications, contributing parameters, and transparent rule thresholds.
+ */
+
 import React from 'react';
 import { useOceanContext } from '../../store/OceanContext';
 import { RISK_DISCLAIMER } from '../../config/riskConfig';

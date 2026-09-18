@@ -1,19 +1,14 @@
-/**
- * Ocean Risk & Disaster Decision-Support API Client
- */
-
 import { APP_CONFIG } from '../../config/appConfig';
 import { LocationRiskResponse, RegionalRiskHotspot } from '../../types';
 import { RISK_DISCLAIMER } from '../../config/riskConfig';
+import { safeFetchJson } from '../../utils/safeFetch';
 
 export class RiskApiClient {
   private baseUrl = APP_CONFIG.api.baseUrl;
 
   async getRiskAlerts(demo: boolean = false): Promise<RegionalRiskHotspot[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/disasters/alerts?demo=${demo}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      return await safeFetchJson<RegionalRiskHotspot[]>(`${this.baseUrl}/disasters/alerts?demo=${demo}`);
     } catch (e) {
       console.warn('Backend /disasters/alerts unreachable, using fallback demo hotspots', e);
       return [
@@ -73,9 +68,9 @@ export class RiskApiClient {
       });
       if (time) params.set('time', time);
 
-      const res = await fetch(`${this.baseUrl}/disasters/risk-at-point?${params.toString()}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      return await safeFetchJson<LocationRiskResponse>(
+        `${this.baseUrl}/disasters/risk-at-point?${params.toString()}`
+      );
     } catch (e) {
       console.warn('Backend /disasters/risk-at-point unreachable, using fallback evaluation', e);
       return {

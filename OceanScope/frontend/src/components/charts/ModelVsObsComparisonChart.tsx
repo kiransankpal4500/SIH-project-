@@ -9,10 +9,11 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import type { ModelObsComparisonItem } from '../../services/hycomApi';
+import type { ModelObsComparisonItem, ModelObsComparisonResponse } from '../../services/hycomApi';
 
 interface ModelVsObsComparisonChartProps {
   height?: number;
+  comparison?: ModelObsComparisonResponse;
   comparisonData?: ModelObsComparisonItem[];
   variable?: 'temperature' | 'salinity';
 }
@@ -30,19 +31,25 @@ const mockComparisonData = [
 
 export const ModelVsObsComparisonChart: React.FC<ModelVsObsComparisonChartProps> = ({
   height = 280,
+  comparison,
   comparisonData,
   variable = 'temperature',
 }) => {
-  const isReal = comparisonData && comparisonData.length > 0;
+  const items = comparisonData || comparison?.profile_comparison || comparison?.levels;
+  const isReal = items && items.length > 0;
   const unit = variable === 'temperature' ? '°C' : 'PSU';
 
   const chartData = isReal
-    ? comparisonData.map((item) => ({
+    ? items.map((item) => ({
         depth: item.depth,
         depthValue: item.depth,
         hycomModel: variable === 'temperature' ? item.model_temperature : item.model_salinity,
-        argoObservation: variable === 'temperature' ? item.observed_temperature : item.observed_salinity,
-        delta: variable === 'temperature' ? item.temperature_difference : item.salinity_difference,
+        argoObservation: variable === 'temperature'
+          ? (item.obs_temperature ?? item.observed_temperature)
+          : (item.obs_salinity ?? item.observed_salinity),
+        delta: variable === 'temperature'
+          ? (item.temp_difference ?? item.temperature_difference)
+          : (item.sal_difference ?? item.salinity_difference),
       }))
     : mockComparisonData.map(d => ({ ...d, depthValue: d.depth }));
 

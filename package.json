@@ -1,8 +1,10 @@
 {
-  "name": "sih-project-root",
+  "name": "oceanscope-root",
   "private": true,
   "scripts": {
+    "dev": "npm --prefix OceanScope/frontend run dev",
     "build": "npm --prefix OceanScope/frontend run build",
-    "install": "npm --prefix OceanScope/frontend install"
+    "install": "npm --prefix OceanScope/frontend install",
+    "deploy:firebase": "npm --prefix OceanScope/frontend run build && firebase deploy --only hosting"
   }
 }
