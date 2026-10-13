@@ -5,6 +5,7 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { getFirestore, Firestore } from "firebase/firestore";
 
 export const firebaseConfig = {
   apiKey: "AIzaSyATUmT1IvdqpN3d3kbqVInUUopoDS4GJsw",
@@ -18,6 +19,9 @@ export const firebaseConfig = {
 
 // Initialize Firebase App
 export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// Initialize Cloud Firestore Database
+export const db: Firestore = getFirestore(firebaseApp);
 
 // Initialize Analytics conditionally when running in supported browser environments
 export let analytics: ReturnType<typeof getAnalytics> | null = null;
