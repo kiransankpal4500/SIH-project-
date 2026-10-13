@@ -1,5 +1,5 @@
 import React from 'react';
-import { Waves, Radio } from 'lucide-react';
+import { Radio } from 'lucide-react';
 import { APP_CONFIG } from '../../config/appConfig';
 import { useOceanContext } from '../../store/OceanContext';
 
@@ -9,10 +9,21 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-[#FFFFFF] border-b border-[#E2E8F0] px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between text-xs font-sans gap-3">
       <div className="flex items-center space-x-3">
-        <div className="flex items-center space-x-2 text-[#0B84C6] font-bold">
-          <Waves className="w-5 h-5" />
-          <span className="text-base tracking-tight text-[#172033]">{APP_CONFIG.name}</span>
-        </div>
+        <img
+          src="/assets/oceanscope-logo.png"
+          alt="OceanScope"
+          width={861}
+          height={290}
+          loading="eager"
+          decoding="sync"
+          draggable={false}
+          style={{
+            height: '28px',
+            width: 'auto',
+            objectFit: 'contain',
+            display: 'block',
+          }}
+        />
         <span className="text-[#CBD5E1]">|</span>
         <span className="text-[#64748B] hidden sm:inline">{APP_CONFIG.tagline}</span>
       </div>

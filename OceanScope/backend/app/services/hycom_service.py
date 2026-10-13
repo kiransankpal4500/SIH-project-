@@ -116,13 +116,36 @@ class INCOISHYCOMService:
             return self.remote_service.get_timestamps(year=year, date=date)
         from app.schemas.hycom_schemas import HYCOMTimestampsResponse
         meta = self.get_metadata()
+        time_range = meta.time_range or []
+        
+        # Extract real available years from indexed dataset
+        extracted_years = sorted(list(set(
+            int(t[:4]) for t in time_range if len(t) >= 4 and t[:4].isdigit()
+        )))
+        available_years = extracted_years if extracted_years else (meta.available_years if meta.available_years else [2026])
+
+        dates: Optional[List[str]] = None
+        timestamps: Optional[List[str]] = None
+
+        if date:
+            timestamps = sorted([t for t in time_range if t.startswith(date)])
+        elif year:
+            dates = sorted(list(set(t[:10] for t in time_range if t.startswith(str(year)))))
+        else:
+            dates = sorted(list(set(t[:10] for t in time_range)))
+
+        earliest = meta.earliest_time or (time_range[0] if time_range else "2026-08-28T06:00:00Z")
+        latest = meta.latest_time or (time_range[-1] if time_range else "2026-08-28T18:00:00Z")
+
         return HYCOMTimestampsResponse(
             dataset_id=meta.dataset,
-            earliest=meta.earliest_time or "2020-01-01T00:00:00Z",
-            latest=meta.latest_time or "2020-02-19T00:00:00Z",
-            available_years=[2020],
-            time_step="3 hours",
-            total_timestamps=len(meta.time_range),
+            earliest=earliest,
+            latest=latest,
+            available_years=available_years,
+            time_step=meta.time_step or "3 hours",
+            total_timestamps=len(time_range),
+            dates=dates,
+            timestamps=timestamps,
         )
 
     def get_point(

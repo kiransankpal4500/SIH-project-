@@ -3,6 +3,7 @@ Argo Service with In-Memory TTL Caching, Telemetry Status Tracking & Demo Mode F
 """
 
 import time
+import asyncio
 import logging
 from typing import Optional, Dict, Tuple, Any
 from datetime import datetime, timezone
@@ -61,8 +62,11 @@ class ArgoService:
                 return cached
 
         try:
-            res = await self.provider.get_argo_observations(
-                min_lat, max_lat, min_lon, max_lon, platform_number, limit
+            res = await asyncio.wait_for(
+                self.provider.get_argo_observations(
+                    min_lat, max_lat, min_lon, max_lon, platform_number, limit
+                ),
+                timeout=max(settings.HTTP_TIMEOUT_SECONDS, 8.0),
             )
             if res.count > 0:
                 self.last_retrieved = datetime.now(timezone.utc).isoformat()
@@ -98,7 +102,10 @@ class ArgoService:
                 return cached
 
         try:
-            res = await self.provider.get_argo_profile(platform_number, cycle_number)
+            res = await asyncio.wait_for(
+                self.provider.get_argo_profile(platform_number, cycle_number),
+                timeout=3.5,
+            )
             if len(res.profile) > 0:
                 self.last_retrieved = datetime.now(timezone.utc).isoformat()
                 self.is_connected = True

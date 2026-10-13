@@ -44,6 +44,7 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
 }) => {
   const {
     state,
+    selectLocation,
     selectArgoFloat,
     evaluateLocationRisk,
   } = useOceanContext();
@@ -75,11 +76,12 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
 
   const handleGlobeClick = (point: THREE.Vector3) => {
     const { lat, lon } = vector3ToLatLon(point);
-    evaluateLocationRisk(lat, lon, depth, state.selectedTimestamp);
+    selectLocation(lat, lon, depth, state.selectedTimestamp);
   };
 
   const handleGlobeDoubleClick = (point: THREE.Vector3) => {
     const { lat, lon } = vector3ToLatLon(point);
+    selectLocation(lat, lon, depth, state.selectedTimestamp);
     if (onDoubleSelectLocation) {
       onDoubleSelectLocation(lat, lon);
     }
@@ -114,7 +116,7 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
           hotspots={state.riskAlerts}
           visible={state.showRiskLayer}
           onSelectHotspot={(h) => {
-            evaluateLocationRisk(h.latitude, h.longitude, depth, state.selectedTimestamp);
+            selectLocation(h.latitude, h.longitude, depth, state.selectedTimestamp);
             focusRegion(h.latitude, h.longitude);
           }}
         />
@@ -159,7 +161,6 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         selectArgoFloat(obs.platform_number, obs.cycle_number);
-                        evaluateLocationRisk(obs.latitude, obs.longitude, depth, state.selectedTimestamp);
                       }}
                     >
                       <octahedronGeometry args={[isSelected ? 0.075 : isHovered ? 0.065 : 0.042]} />

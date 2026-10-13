@@ -22,7 +22,7 @@ import {
 import { formatCoordinates, formatValue } from '../../utils/formatters';
 
 export const ExplorerPage: React.FC = () => {
-  const { state, evaluateLocationRisk } = useOceanContext();
+  const { state, selectLocation, evaluateLocationRisk } = useOceanContext();
 
   const [showCurrents, setShowCurrents] = useState<boolean>(true);
   const [showPoints, setShowPoints] = useState<boolean>(true);
@@ -46,20 +46,35 @@ export const ExplorerPage: React.FC = () => {
   }, [isFullscreen, activeOceanChunk]);
 
   const selectedFloat = state.selectedLiveArgoProfile;
-  const hasSelection = !!selectedFloat || !!state.selectedRiskLocation;
+  const hasSelection = !!state.selectedRiskLocation || !!selectedFloat;
 
-  const currentCoords = selectedFloat
-    ? { lat: selectedFloat.latitude ?? 19.076, lon: selectedFloat.longitude ?? 72.8777 }
-    : state.selectedRiskLocation
+  const currentCoords = state.selectedRiskLocation
     ? { lat: state.selectedRiskLocation.lat, lon: state.selectedRiskLocation.lon }
+    : selectedFloat
+    ? { lat: selectedFloat.latitude ?? 19.076, lon: selectedFloat.longitude ?? 72.8777 }
     : { lat: 19.076, lon: 72.8777 };
+
+  // Resolve telemetry values from either Argo in-situ profile or HYCOM profile
+  const floatFirstLevel = selectedFloat?.profile && selectedFloat.profile.length > 0 ? selectedFloat.profile[0] : null;
+  const hycomLevels = state.hycomProfile?.profile || [];
+  const hycomMatchedLevel = hycomLevels.find((l) => Math.abs(l.depth - state.selectedDepth) < 1) || hycomLevels[0];
+
+  const tempVal = selectedFloat
+    ? floatFirstLevel?.temperature
+    : hycomMatchedLevel?.temperature ?? (state.hycomPoint?.variable === 'temperature' ? state.hycomPoint.value : null);
+
+  const salVal = selectedFloat
+    ? floatFirstLevel?.salinity
+    : hycomMatchedLevel?.salinity ?? (state.hycomPoint?.variable === 'salinity' ? state.hycomPoint.value : null);
+
+  const sourceName = selectedFloat ? 'INCOIS ERDDAP' : 'INCOIS HYCOM';
 
   const toggleSection = (name: string) => {
     setActiveSection(activeSection === name ? null : name);
   };
 
   const handleGlobeDoubleClick = (lat: number, lon: number) => {
-    evaluateLocationRisk(lat, lon, state.selectedDepth, state.selectedTimestamp);
+    selectLocation(lat, lon, state.selectedDepth, state.selectedTimestamp);
     setActiveOceanChunk({ lat, lon });
   };
 
@@ -126,45 +141,41 @@ export const ExplorerPage: React.FC = () => {
                 <span>Selected Location</span>
               </div>
               <div className="text-xl font-bold text-[#172033] tracking-tight">
-                {selectedFloat
-                  ? formatCoordinates(selectedFloat.latitude ?? 12.0, selectedFloat.longitude ?? 80.0)
-                  : state.selectedRiskLocation
-                  ? formatCoordinates(state.selectedRiskLocation.lat, state.selectedRiskLocation.lon)
-                  : '18.50° N, 88.50° E'}
+                {formatCoordinates(currentCoords.lat, currentCoords.lon)}
               </div>
             </div>
 
             {/* Key telemetry chips */}
             <div className="flex flex-wrap items-center gap-2">
-              {selectedFloat && selectedFloat.profile && selectedFloat.profile.length > 0 && (
-                <>
-                  <div className="px-3 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs">
-                    <span className="text-[#64748B] block text-[10px]">Temperature</span>
-                    <span className="font-bold text-[#DC2626]">
-                      {selectedFloat.profile[0].temperature != null
-                        ? formatValue(selectedFloat.profile[0].temperature, '°C')
-                        : '—'}
-                    </span>
-                  </div>
+              <div className="px-3 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs">
+                <span className="text-[#64748B] block text-[10px]">Temperature</span>
+                <span className="font-bold text-[#DC2626]">
+                  {state.hycomLoading && tempVal == null
+                    ? 'Loading...'
+                    : tempVal != null
+                    ? formatValue(tempVal, '°C')
+                    : '—'}
+                </span>
+              </div>
 
-                  <div className="px-3 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs">
-                    <span className="text-[#64748B] block text-[10px]">Salinity</span>
-                    <span className="font-bold text-[#0B84C6]">
-                      {selectedFloat.profile[0].salinity != null
-                        ? formatValue(selectedFloat.profile[0].salinity, 'PSU')
-                        : '—'}
-                    </span>
-                  </div>
+              <div className="px-3 py-1.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs">
+                <span className="text-[#64748B] block text-[10px]">Salinity</span>
+                <span className="font-bold text-[#0B84C6]">
+                  {state.hycomLoading && salVal == null
+                    ? 'Loading...'
+                    : salVal != null
+                    ? formatValue(salVal, 'PSU')
+                    : '—'}
+                </span>
+              </div>
 
-                  <div className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs">
-                    <span className="text-[#64748B] block text-[10px]">Depth Level</span>
-                    <span className="font-semibold text-[#172033]">{state.selectedDepth}m</span>
-                  </div>
-                </>
-              )}
+              <div className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs">
+                <span className="text-[#64748B] block text-[10px]">Depth Level</span>
+                <span className="font-semibold text-[#172033]">{state.selectedDepth}m</span>
+              </div>
 
               {/* Risk Status */}
-              {state.locationRisk && (
+              {state.locationRisk ? (
                 <div
                   className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
                     state.locationRisk.overall_risk === 'HIGH' || state.locationRisk.overall_risk === 'CRITICAL'
@@ -177,13 +188,18 @@ export const ExplorerPage: React.FC = () => {
                   <span className="text-[10px] block opacity-80">Risk Status</span>
                   <span>{state.locationRisk.overall_risk}</span>
                 </div>
-              )}
+              ) : state.hycomLoading ? (
+                <div className="px-3 py-1.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-xs font-semibold text-[#64748B]">
+                  <span className="text-[10px] block opacity-80">Risk Status</span>
+                  <span>Evaluating...</span>
+                </div>
+              ) : null}
 
               {/* Source Badge */}
               <div className="px-3 py-1.5 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-xs">
                 <span className="text-[#64748B] block text-[10px]">Source</span>
                 <span className="font-medium text-[#475569]">
-                  {selectedFloat ? 'INCOIS ERDDAP' : 'INCOIS HYCOM'}
+                  {sourceName}
                 </span>
               </div>
 

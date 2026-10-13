@@ -26,19 +26,10 @@ class OceanService:
 
     @staticmethod
     def get_observations() -> List[ObservationSchema]:
-        return [
+        from app.services.argo_service import argo_service
+        obs = [
             ObservationSchema(
                 id="obs-001",
-                platformId="ARGO-2901452",
-                platformType="ARGO_FLOAT",
-                source="ARGO",
-                location={"latitude": 10.45, "longitude": 72.82, "depth": 5, "regionName": "Arabian Sea"},
-                timestamp="2026-08-28T04:12:00Z",
-                variables={"temperature": 29.1, "salinity": 35.2, "currentSpeed": 0.45},
-                status="ACTIVE",
-            ),
-            ObservationSchema(
-                id="obs-002",
                 platformId="INCOIS-MB-04",
                 platformType="MOORED_BUOY",
                 source="INCOIS",
@@ -47,7 +38,53 @@ class OceanService:
                 variables={"temperature": 28.8, "salinity": 33.6, "chlorophyll": 1.45, "currentSpeed": 0.78, "seaSurfaceHeight": 0.12},
                 status="ACTIVE",
             ),
+            ObservationSchema(
+                id="obs-002",
+                platformId="INCOIS-TWR-02",
+                platformType="COASTAL_TOWER",
+                source="INCOIS",
+                location={"latitude": 17.68, "longitude": 83.21, "depth": 0, "regionName": "Visakhapatnam Shelf"},
+                timestamp="2026-08-28T05:45:00Z",
+                variables={"temperature": 29.3, "salinity": 32.9, "currentSpeed": 0.52},
+                status="ACTIVE",
+            ),
+            ObservationSchema(
+                id="obs-003",
+                platformId="INCOIS-BD-08",
+                platformType="DRIFTING_BUOY",
+                source="INCOIS",
+                location={"latitude": 15.25, "longitude": 68.42, "depth": 0, "regionName": "Arabian Sea"},
+                timestamp="2026-08-28T06:00:00Z",
+                variables={"temperature": 28.6, "salinity": 35.8, "currentSpeed": 0.64},
+                status="ACTIVE",
+            ),
         ]
+        
+        # Ingest Argo array items
+        demo_argo = argo_service._get_demo_observations()
+        for item in demo_argo.observations:
+            obs.append(
+                ObservationSchema(
+                    id=f"argo-{item.platform_number}",
+                    platformId=f"ARGO-{item.platform_number}",
+                    platformType="ARGO_FLOAT",
+                    source="ARGO",
+                    location={
+                        "latitude": item.latitude,
+                        "longitude": item.longitude,
+                        "depth": item.pressure or 5.0,
+                        "regionName": "Arabian Sea" if item.longitude < 77 else "Bay of Bengal",
+                    },
+                    timestamp=item.timestamp or "2026-08-28T04:12:00Z",
+                    variables={
+                        "temperature": item.temperature,
+                        "salinity": item.salinity,
+                        "currentSpeed": 0.42,
+                    },
+                    status="ACTIVE",
+                )
+            )
+        return obs
 
     @staticmethod
     def get_profile(platform_id: str) -> OceanProfileSchema:

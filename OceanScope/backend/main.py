@@ -31,6 +31,8 @@ configured_origins = (
     else [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
 )
 firebase_production_origins = [
+    "https://oceanscope-d6305.web.app",
+    "https://oceanscope-d6305.firebaseapp.com",
     "https://oceanscope-b3b88.web.app",
     "https://oceanscope-b3b88.firebaseapp.com",
     "http://localhost:5173",

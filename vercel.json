@@ -1,17 +1,9 @@
 {
   "version": 2,
-  "installCommand": "cd OceanScope/frontend && npm install --loglevel=error",
-  "buildCommand": "cd OceanScope/frontend && npm run build",
-  "outputDirectory": "OceanScope/frontend/dist",
-  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/api/index.py"
     }
   ]
 }

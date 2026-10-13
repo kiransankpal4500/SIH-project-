@@ -3,6 +3,7 @@ Bathymetry API Router
 Exposes GEBCO bathymetric depth and elevation queries for point locations and 3D local chunks.
 """
 
+import asyncio
 from fastapi import APIRouter, Query, HTTPException
 from typing import Dict, Any, Optional
 from app.services.gebco_service import gebco_service
@@ -20,7 +21,9 @@ async def get_bathymetry_point(
     Elevation is relative to mean sea level; positive depth represents seabed depth.
     """
     try:
-        return gebco_service.get_point(latitude=latitude, longitude=longitude)
+        return await asyncio.to_thread(
+            gebco_service.get_point, latitude=latitude, longitude=longitude
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bathymetry unavailable: {str(e)}")
 
@@ -36,7 +39,8 @@ async def get_bathymetry_chunk(
     Get a 2D bathymetric mesh chunk for local 3D ocean chunk terrain reconstruction from GEBCO.
     """
     try:
-        return gebco_service.get_chunk(
+        return await asyncio.to_thread(
+            gebco_service.get_chunk,
             latitude=latitude,
             longitude=longitude,
             chunk_size=chunk_size,

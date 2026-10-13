@@ -72,7 +72,8 @@ async def get_hycom_point(
     Extract single point HYCOM model value using nearest-neighbor spatial/temporal indexing with caching.
     """
     try:
-        return hycom_service.get_point(
+        return await asyncio.to_thread(
+            hycom_service.get_point,
             latitude=latitude,
             longitude=longitude,
             depth=depth,
@@ -95,7 +96,8 @@ async def get_hycom_profile(
     Fetch vertical depth profile (temperature & salinity vs depth) from matching INCOIS HYCOM NetCDF dataset with caching.
     """
     try:
-        return hycom_service.get_profile(
+        return await asyncio.to_thread(
+            hycom_service.get_profile,
             latitude=latitude,
             longitude=longitude,
             time_str=time,
@@ -117,7 +119,8 @@ async def get_hycom_current(
     Fetch current velocity vector (u, v), calculate speed (sqrt(u²+v²)) and oceanographic direction with caching.
     """
     try:
-        return hycom_service.get_current(
+        return await asyncio.to_thread(
+            hycom_service.get_current,
             latitude=latitude,
             longitude=longitude,
             depth=depth,
@@ -142,7 +145,8 @@ async def get_hycom_timeseries(
     Extract chronological time-series points across all available HYCOM NetCDF dataset files with caching.
     """
     try:
-        return hycom_service.get_timeseries(
+        return await asyncio.to_thread(
+            hycom_service.get_timeseries,
             latitude=latitude,
             longitude=longitude,
             depth=depth,
@@ -183,7 +187,8 @@ async def compare_hycom_with_argo(
         ]
 
         # 2. Compute spatial matching, time matching, and metrics using HYCOM service
-        return hycom_service.compare_with_argo_profile(
+        return await asyncio.to_thread(
+            hycom_service.compare_with_argo_profile,
             platform_number=platform_number,
             cycle_number=cycle_number,
             obs_lat=obs_lat,

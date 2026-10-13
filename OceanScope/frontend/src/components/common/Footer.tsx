@@ -4,7 +4,23 @@ import { APP_CONFIG } from '../../config/appConfig';
 export const Footer: React.FC = () => {
   return (
     <footer className="bg-[#FFFFFF] border-t border-[#E2E8F0] px-6 py-4 text-xs text-[#64748B] flex flex-col sm:flex-row items-center justify-between gap-3 mt-auto">
-      <div>
+      <div className="flex items-center gap-3">
+        <img
+          src="/assets/oceanscope-logo.png"
+          alt="OceanScope"
+          width={861}
+          height={290}
+          loading="eager"
+          decoding="sync"
+          draggable={false}
+          style={{
+            height: '24px',
+            width: 'auto',
+            objectFit: 'contain',
+            display: 'block',
+            opacity: 0.85,
+          }}
+        />
         <span>© 2026 {APP_CONFIG.name} — Operational Oceanographic Research Platform</span>
       </div>
       <div className="flex items-center space-x-3 text-xs font-medium text-[#475569]">

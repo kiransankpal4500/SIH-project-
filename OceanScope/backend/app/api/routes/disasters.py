@@ -3,6 +3,7 @@ Ocean Risk & Disaster Decision-Support Router
 Provides endpoints for regional risk alerts, point-based location risk calculations, and threshold configurations.
 """
 
+import asyncio
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Optional, Dict, Any
 
@@ -25,7 +26,9 @@ async def get_disaster_alerts(
     Evaluates real ocean conditions from INCOIS HYCOM when demo=False.
     """
     try:
-        return ocean_risk_service.get_regional_risk_hotspots(is_demo=demo)
+        return await asyncio.to_thread(
+            ocean_risk_service.get_regional_risk_hotspots, is_demo=demo
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to evaluate regional risk alerts: {str(e)}")
 
@@ -43,7 +46,8 @@ async def evaluate_risk_at_point(
     Extracts real values from INCOIS HYCOM model fields (Current Speed, SST Anomaly, SSH, TCHP, MLD).
     """
     try:
-        return ocean_risk_service.evaluate_location_risk(
+        return await asyncio.to_thread(
+            ocean_risk_service.evaluate_location_risk,
             latitude=latitude,
             longitude=longitude,
             depth=depth,

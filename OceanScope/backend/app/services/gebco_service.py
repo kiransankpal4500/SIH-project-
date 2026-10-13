@@ -21,7 +21,7 @@ GEBCO_SOURCE = "GEBCO (General Bathymetric Chart of the Oceans)"
 
 class GebcoBathymetryService:
     def __init__(self):
-        self.timeout = 8  # seconds for remote subset API calls
+        self.timeout = 2.5  # seconds for remote subset API calls
 
     def _generate_cache_key(self, prefix: str, **kwargs) -> str:
         items = [f"{k}={v}" for k, v in sorted(kwargs.items())]

@@ -549,10 +549,10 @@ export const OceanChunkView: React.FC<OceanChunkViewProps> = ({
                 </div>
               </div>
 
-              {/* 3D and 2D Split Viewport */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
-                {/* 3D Ocean Chunk Simulation (7 cols on large screens) */}
-                <div className="xl:col-span-7 flex flex-col">
+              {/* 3D and 2D Equal Side-by-Side Viewport */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+                {/* 3D Ocean Chunk Simulation (Left Column) */}
+                <div className="flex flex-col">
                   <OceanChunk3DView
                     chunkData={chunkData}
                     selectedVariable={selectedVar}
@@ -567,8 +567,8 @@ export const OceanChunkView: React.FC<OceanChunkViewProps> = ({
                   />
                 </div>
 
-                {/* 2D Real-Depth Cross Section Profile (5 cols on large screens) */}
-                <div className="xl:col-span-5 flex flex-col">
+                {/* 2D Real-Depth Cross Section Profile (Right Column) */}
+                <div className="flex flex-col">
                   <OceanChunk2DProfile
                     bathymetricDepth={bathymetricDepth}
                     selectedVariable={selectedVar}

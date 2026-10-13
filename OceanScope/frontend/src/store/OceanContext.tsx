@@ -3,7 +3,7 @@
  * Centralizes state for 3D globe visualization, HYCOM/Copernicus models, Argo telemetry, and risk indicators.
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { OceanVariable, LocationRiskResponse, RegionalRiskHotspot } from '../types';
 import { APP_CONFIG } from '../config/appConfig';
 import {
@@ -71,6 +71,7 @@ interface OceanContextType {
   setIs3dGlobeActive: (active: boolean) => void;
   setSelectedRegion: (region: string) => void;
   setIsLiveDataMode: (enabled: boolean) => void;
+  selectLocation: (lat: number, lon: number, depth?: number, time?: string) => Promise<void>;
   selectArgoFloat: (platformNumber: string, cycleNumber?: number) => Promise<void>;
   fetchLiveData: () => Promise<void>;
   fetchHycomComparison: (platformNumber: string, cycleNumber?: number) => Promise<void>;
@@ -93,14 +94,9 @@ interface OceanContextType {
 }
 
 const DEFAULT_TIMESTAMPS = [
-  '2019-08-15T00:00:00Z',
-  '2019-08-15T03:00:00Z',
-  '2019-08-15T06:00:00Z',
-  '2019-08-15T09:00:00Z',
-  '2019-08-15T12:00:00Z',
-  '2019-08-15T15:00:00Z',
-  '2019-08-15T18:00:00Z',
-  '2019-08-15T21:00:00Z',
+  '2026-08-28T06:00:00Z',
+  '2026-08-28T12:00:00Z',
+  '2026-08-28T18:00:00Z',
 ];
 
 const initialOceanState: OceanState = {
@@ -123,15 +119,15 @@ const initialOceanState: OceanState = {
   hycomError: null,
   displayMode: 'OBSERVATION',
   // Time Animation
-  selectedTimestamp: '2019-08-15T12:00:00Z',
+  selectedTimestamp: '2026-08-28T18:00:00Z',
   availableTimestamps: DEFAULT_TIMESTAMPS,
-  availableYears: [2018, 2019, 2020],
-  availableDates: ['2019-08-15'],
+  availableYears: [2026],
+  availableDates: ['2026-08-28'],
   availableTimes: DEFAULT_TIMESTAMPS,
-  selectedYear: 2019,
-  selectedDate: '2019-08-15',
-  earliestTime: '2018-01-01T12:00:00Z',
-  latestTime: '2020-02-19T09:00:00Z',
+  selectedYear: 2026,
+  selectedDate: '2026-08-28',
+  earliestTime: '2026-08-28T06:00:00Z',
+  latestTime: '2026-08-28T18:00:00Z',
   temporalLoading: false,
   isPlaying: false,
   playbackSpeed: 1,
@@ -139,7 +135,7 @@ const initialOceanState: OceanState = {
   locationRisk: null,
   riskAlerts: [],
   showRiskLayer: true,
-  selectedRiskLocation: { lat: 18.5, lon: 88.5 },
+  selectedRiskLocation: { lat: 7.36, lon: 69.98 },
   isDemoMode: false,
 };
 
@@ -147,6 +143,7 @@ const OceanContext = createContext<OceanContextType | undefined>(undefined);
 
 export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<OceanState>(initialOceanState);
+  const requestSeqRef = useRef<number>(0);
 
   const setSelectedVariable = (variable: OceanVariable) => {
     setState((prev) => ({ ...prev, selectedVariable: variable }));
@@ -339,30 +336,32 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const initHycomMeta = async () => {
       try {
         const meta = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps`);
-        const years: number[] = meta.available_years || [2018, 2019, 2020, 2021, 2022, 2023, 2024];
-        const initialYear = years.includes(2024) ? 2024 : years[years.length - 1];
+        const years: number[] = meta.available_years && meta.available_years.length > 0 ? meta.available_years : [2026];
+        const latestIso: string = meta.latest || '2026-08-28T18:00:00Z';
+        const initialYear = parseInt(latestIso.slice(0, 4), 10) || years[years.length - 1];
+        const initialDate = latestIso.slice(0, 10);
 
         // Fetch dates for the initial year
-        let dates: string[] = [];
-        try {
-          const dateData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?year=${initialYear}`);
-          dates = dateData.dates || [];
-        } catch {
-          dates = [];
+        let dates: string[] = meta.dates || [];
+        if (dates.length === 0) {
+          try {
+            const dateData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?year=${initialYear}`);
+            dates = dateData.dates || [initialDate];
+          } catch {
+            dates = [initialDate];
+          }
         }
-        const initialDate = dates.includes(`${initialYear}-08-15`)
-          ? `${initialYear}-08-15`
-          : dates[dates.length - 1] || `${initialYear}-01-01`;
 
         // Fetch timestamps for initial date
-        let timestamps: string[] = [];
-        try {
-          const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${initialDate}`);
-          timestamps = tsData.timestamps || [];
-        } catch {
-          timestamps = [];
+        let timestamps: string[] = meta.timestamps || [];
+        if (timestamps.length === 0) {
+          try {
+            const tsData = await safeFetchJson<any>(`${APP_CONFIG.api.baseUrl}/models/hycom/timestamps?date=${initialDate}`);
+            timestamps = tsData.timestamps || [latestIso];
+          } catch {
+            timestamps = [latestIso];
+          }
         }
-        const initialTs = timestamps.find((t) => t.includes('12:00:00')) || timestamps[timestamps.length - 1] || `${initialDate}T12:00:00Z`;
 
         setState((prev) => ({
           ...prev,
@@ -372,10 +371,15 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           availableTimestamps: timestamps.length > 0 ? timestamps : prev.availableTimestamps,
           selectedYear: initialYear,
           selectedDate: initialDate,
-          selectedTimestamp: initialTs,
+          selectedTimestamp: latestIso,
+          earliestTime: meta.earliest || prev.earliestTime,
+          latestTime: meta.latest || prev.latestTime,
         }));
+
+        // Query initial point / profile data for default location using the real latest timestamp
+        selectLocation(7.36, 69.98, 0, latestIso);
       } catch (err) {
-        console.warn('Could not initialize HYCOM historical temporal metadata (backend may be offline or starting up)', err);
+        console.warn('Could not initialize HYCOM historical temporal metadata', err);
       }
     };
     initHycomMeta();
@@ -392,18 +396,19 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         isLiveDataMode: true,
       }));
 
-      // Automatically load the first float's vertical profile if none is selected
+      // Automatically load the first float's vertical profile if available
       if (data.observations && data.observations.length > 0) {
         const first = data.observations[0];
         selectArgoFloat(first.platform_number, first.cycle_number);
+      } else {
+        selectLocation(7.36, 69.98);
       }
     } catch (err) {
-      console.warn('INCOIS Live Data fetch failed, falling back to Demo Mode', err);
+      console.warn('INCOIS Live Data fetch error', err);
       setState((prev) => ({
         ...prev,
-        liveDataStatus: 'DEMO',
-        isLiveDataMode: false,
-        errorMessage: 'INCOIS data temporarily unavailable. Showing Demo Data.',
+        liveDataStatus: 'FALLBACK',
+        errorMessage: 'INCOIS telemetry temporarily slow or unavailable. Real HYCOM model data active.',
       }));
     }
   };
@@ -426,18 +431,120 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
+  /**
+   * Unified Selection for any Arbitrary Geographic Coordinate on Globe
+   * Updates coordinates immediately, prevents stale overwrites with request sequence check,
+   * and fetches colocated HYCOM profile and risk evaluation.
+   */
+  const selectLocation = async (lat: number, lon: number, depth?: number, time?: string) => {
+    const reqId = ++requestSeqRef.current;
+    const targetDepth = depth !== undefined ? depth : state.selectedDepth;
+    const targetTime = time || state.selectedTimestamp;
+    const isDemo = !state.isLiveDataMode;
+
+    // Immediately update coordinates and clear previous location's stale values
+    setState((prev) => ({
+      ...prev,
+      selectedRiskLocation: { lat, lon },
+      selectedPlatformId: null,
+      selectedLiveArgoProfile: null,
+      locationRisk: null,
+      hycomProfile: null,
+      hycomPoint: null,
+      hycomLoading: true,
+      hycomError: null,
+    }));
+
+    try {
+      const [riskRes, profileRes] = await Promise.allSettled([
+        riskApiClient.getRiskAtPoint(lat, lon, targetDepth, targetTime, isDemo),
+        getHycomProfile(lat, lon, targetTime),
+      ]);
+
+      // If another location was clicked while this request was in flight, ignore
+      if (reqId !== requestSeqRef.current) return;
+
+      const locationRisk = riskRes.status === 'fulfilled' ? riskRes.value : null;
+      const hycomProfile = profileRes.status === 'fulfilled' ? profileRes.value : null;
+
+      setState((prev) => ({
+        ...prev,
+        selectedRiskLocation: { lat, lon },
+        locationRisk,
+        hycomProfile,
+        hycomLoading: false,
+        hycomError: hycomProfile ? null : 'HYCOM profile unavailable for this point.',
+      }));
+    } catch (err) {
+      if (reqId !== requestSeqRef.current) return;
+      console.error('Failed to load data for selected location', err);
+      setState((prev) => ({
+        ...prev,
+        hycomLoading: false,
+        hycomError: 'Failed to retrieve data for location.',
+      }));
+    }
+  };
+
+  /**
+   * Selection for In-Situ Argo Float Marker
+   */
   const selectArgoFloat = async (platformNumber: string, cycleNumber = 1) => {
+    const reqId = ++requestSeqRef.current;
+    const targetDepth = state.selectedDepth;
+    const targetTime = state.selectedTimestamp;
+    const isDemo = !state.isLiveDataMode;
+
+    const obs = state.liveObservations.find((o) => o.platform_number === platformNumber);
+    const initialLat = obs?.latitude;
+    const initialLon = obs?.longitude;
+
+    setState((prev) => ({
+      ...prev,
+      selectedPlatformId: platformNumber,
+      selectedLiveArgoProfile: null,
+      selectedRiskLocation: initialLat != null && initialLon != null ? { lat: initialLat, lon: initialLon } : prev.selectedRiskLocation,
+      locationRisk: null,
+      hycomComparison: null,
+      hycomLoading: true,
+      hycomError: null,
+    }));
+
     try {
       const profile = await getArgoProfile(platformNumber, cycleNumber);
+      if (reqId !== requestSeqRef.current) return;
+
+      const lat = profile.latitude ?? initialLat ?? 12.0;
+      const lon = profile.longitude ?? initialLon ?? 80.0;
+
+      const [compRes, riskRes] = await Promise.allSettled([
+        getHycomArgoComparison(platformNumber, cycleNumber),
+        riskApiClient.getRiskAtPoint(lat, lon, targetDepth, targetTime, isDemo),
+      ]);
+
+      if (reqId !== requestSeqRef.current) return;
+
+      const hycomComparison = compRes.status === 'fulfilled' ? compRes.value : null;
+      const locationRisk = riskRes.status === 'fulfilled' ? riskRes.value : null;
+
       setState((prev) => ({
         ...prev,
         selectedPlatformId: platformNumber,
         selectedLiveArgoProfile: profile,
+        selectedRiskLocation: { lat, lon },
+        locationRisk,
+        hycomComparison,
+        hycomLoading: false,
+        displayMode: 'COMPARISON',
       }));
-      // Automatically cross-validate with HYCOM model
-      fetchHycomComparison(platformNumber, cycleNumber);
     } catch (err) {
+      if (reqId !== requestSeqRef.current) return;
       console.error('Failed to load Argo profile', err);
+      setState((prev) => ({
+        ...prev,
+        hycomLoading: false,
+        hycomError: 'Failed to load Argo float profile.',
+      }));
     }
   };
 
@@ -503,11 +610,11 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Sync HYCOM Point query whenever variable, depth, or timestamp changes
   useEffect(() => {
     if (state.displayMode === 'MODEL') {
-      const lat = state.selectedLiveArgoProfile?.latitude ?? 13.75;
-      const lon = state.selectedLiveArgoProfile?.longitude ?? 87.30;
+      const lat = state.selectedLiveArgoProfile?.latitude ?? state.selectedRiskLocation?.lat ?? 13.75;
+      const lon = state.selectedLiveArgoProfile?.longitude ?? state.selectedRiskLocation?.lon ?? 87.30;
       fetchHycomPoint(lat, lon, state.selectedDepth, state.selectedVariable, state.selectedTimestamp);
     }
-  }, [state.selectedVariable, state.selectedDepth, state.selectedTimestamp, state.displayMode]);
+  }, [state.selectedVariable, state.selectedDepth, state.selectedTimestamp, state.displayMode, state.selectedRiskLocation]);
 
   const evaluateLocationRisk = async (
     lat: number,
@@ -557,10 +664,9 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     evaluateLocationRisk(18.5, 88.5, 0, '2026-08-28T06:00:00Z');
   };
 
-  // Preload initial risk alerts and default coordinate risk evaluation on mount or live data mode toggle
+  // Preload initial risk alerts on mount or live data mode toggle
   useEffect(() => {
     fetchRiskAlerts();
-    evaluateLocationRisk(18.5, 88.5, state.selectedDepth, state.selectedTimestamp);
   }, [state.isLiveDataMode]);
 
   return (
@@ -573,6 +679,7 @@ export const OceanProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setIs3dGlobeActive,
         setSelectedRegion,
         setIsLiveDataMode,
+        selectLocation,
         selectArgoFloat,
         fetchLiveData,
         fetchHycomComparison,
@@ -606,3 +713,4 @@ export const useOceanContext = (): OceanContextType => {
   }
   return context;
 };
+

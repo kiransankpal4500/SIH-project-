@@ -39,7 +39,7 @@ class Settings:
         "INCOIS_ERDDAP_BASE_URL", "https://erddap.incois.gov.in/erddap/"
     )
     INCOIS_DATASET_ID: str = "Indian_ARGO_Floats"
-    HTTP_TIMEOUT_SECONDS: int = int(os.getenv("HTTP_TIMEOUT_SECONDS", "10"))
+    HTTP_TIMEOUT_SECONDS: int = int(os.getenv("HTTP_TIMEOUT_SECONDS", "6"))
     CACHE_EXPIRATION_SECONDS: int = int(os.getenv("CACHE_EXPIRATION_SECONDS", "600"))
 
     # HYCOM Model Storage & Remote Data Access Configuration

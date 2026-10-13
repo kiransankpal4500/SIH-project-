@@ -7,13 +7,13 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyA9Vvxk-vMz-BR8_8ukwLkPNhls8BiEFao",
-  authDomain: "oceanscope-b3b88.firebaseapp.com",
-  projectId: "oceanscope-b3b88",
-  storageBucket: "oceanscope-b3b88.firebasestorage.app",
-  messagingSenderId: "1067253343102",
-  appId: "1:1067253343102:web:416916b90a096c2e7ec92f",
-  measurementId: "G-5K7TRRLR6X"
+  apiKey: "AIzaSyATUmT1IvdqpN3d3kbqVInUUopoDS4GJsw",
+  authDomain: "oceanscope-d6305.firebaseapp.com",
+  projectId: "oceanscope-d6305",
+  storageBucket: "oceanscope-d6305.firebasestorage.app",
+  messagingSenderId: "544695904804",
+  appId: "1:544695904804:web:340b112dad5173af4686b1",
+  measurementId: "G-6290YB1F8H"
 };
 
 // Initialize Firebase App
