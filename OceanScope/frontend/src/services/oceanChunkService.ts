@@ -108,7 +108,7 @@ export interface CopernicusMetadataResponse {
   supported_chunk_sizes: number[];
 }
 
-const BASE_URL = APP_CONFIG.api.baseUrl;
+const getBaseUrl = () => APP_CONFIG.api.baseUrl;
 
 export const oceanChunkService = {
   /**
@@ -119,7 +119,7 @@ export const oceanChunkService = {
    */
   async getBathymetryPoint(lat: number, lon: number, signal?: AbortSignal): Promise<BathymetryPointResponse> {
     return safeFetchJson<BathymetryPointResponse>(
-      `${BASE_URL}/bathymetry/point?latitude=${lat}&longitude=${lon}`,
+      `${getBaseUrl()}/bathymetry/point?latitude=${lat}&longitude=${lon}`,
       { signal }
     );
   },
@@ -135,7 +135,7 @@ export const oceanChunkService = {
     signal?: AbortSignal
   ): Promise<BathymetryChunkResponse> {
     return safeFetchJson<BathymetryChunkResponse>(
-      `${BASE_URL}/bathymetry/chunk?latitude=${lat}&longitude=${lon}&chunk_size=${chunkSize}&resolution=${resolution}`,
+      `${getBaseUrl()}/bathymetry/chunk?latitude=${lat}&longitude=${lon}&chunk_size=${chunkSize}&resolution=${resolution}`,
       { signal }
     );
   },
@@ -151,7 +151,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusPointResponse> {
-    let url = `${BASE_URL}/models/copernicus/point?latitude=${lat}&longitude=${lon}&depth=${depth}&variable=${variable}`;
+    let url = `${getBaseUrl()}/models/copernicus/point?latitude=${lat}&longitude=${lon}&depth=${depth}&variable=${variable}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     return safeFetchJson<CopernicusPointResponse>(url, { signal });
   },
@@ -166,7 +166,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusCurrentResponse> {
-    let url = `${BASE_URL}/models/copernicus/current?latitude=${lat}&longitude=${lon}&depth=${depth}`;
+    let url = `${getBaseUrl()}/models/copernicus/current?latitude=${lat}&longitude=${lon}&depth=${depth}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     return safeFetchJson<CopernicusCurrentResponse>(url, { signal });
   },
@@ -180,7 +180,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusProfileResponse> {
-    let url = `${BASE_URL}/models/copernicus/profile?latitude=${lat}&longitude=${lon}`;
+    let url = `${getBaseUrl()}/models/copernicus/profile?latitude=${lat}&longitude=${lon}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     return safeFetchJson<CopernicusProfileResponse>(url, { signal });
   },
@@ -190,7 +190,7 @@ export const oceanChunkService = {
    */
   async getCopernicusMetadata(signal?: AbortSignal): Promise<CopernicusMetadataResponse> {
     return safeFetchJson<CopernicusMetadataResponse>(
-      `${BASE_URL}/models/copernicus/metadata`,
+      `${getBaseUrl()}/models/copernicus/metadata`,
       { signal }
     );
   },
@@ -206,7 +206,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusPointResponse> {
-    let url = `${BASE_URL}/models/hycom/point?latitude=${lat}&longitude=${lon}&depth=${depth}&variable=${variable}`;
+    let url = `${getBaseUrl()}/models/hycom/point?latitude=${lat}&longitude=${lon}&depth=${depth}&variable=${variable}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     const data = await safeFetchJson<any>(url, { signal });
     if (!data) throw new Error('HYCOM point data unavailable');
@@ -235,7 +235,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusCurrentResponse> {
-    let url = `${BASE_URL}/models/hycom/current?latitude=${lat}&longitude=${lon}&depth=${depth}`;
+    let url = `${getBaseUrl()}/models/hycom/current?latitude=${lat}&longitude=${lon}&depth=${depth}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     const data = await safeFetchJson<any>(url, { signal });
     if (!data) throw new Error('HYCOM current data unavailable');
@@ -264,7 +264,7 @@ export const oceanChunkService = {
     time?: string,
     signal?: AbortSignal
   ): Promise<CopernicusProfileResponse> {
-    let url = `${BASE_URL}/models/hycom/profile?latitude=${lat}&longitude=${lon}`;
+    let url = `${getBaseUrl()}/models/hycom/profile?latitude=${lat}&longitude=${lon}`;
     if (time) url += `&time=${encodeURIComponent(time)}`;
     const data = await safeFetchJson<any>(url, { signal });
     if (!data) throw new Error('HYCOM profile data unavailable');
@@ -298,7 +298,7 @@ export const oceanChunkService = {
     signal?: AbortSignal
   ): Promise<MarineLifeResponse> {
     return safeFetchJson<MarineLifeResponse>(
-      `${BASE_URL}/marine-life/species?latitude=${lat}&longitude=${lon}&depth=${depth}&radius_km=${radiusKm}&max_species=${maxSpecies}`,
+      `${getBaseUrl()}/marine-life/species?latitude=${lat}&longitude=${lon}&depth=${depth}&radius_km=${radiusKm}&max_species=${maxSpecies}`,
       { signal }
     );
   },

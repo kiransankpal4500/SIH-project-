@@ -96,12 +96,13 @@ export const SignupPage: React.FC = () => {
 
     try {
       await loginWithGoogle();
-      navigate('/explorer');
+      navigate('/');
     } catch (err: any) {
-      console.error('[Signup] Google Sign-In error:', err);
+      console.error('[Signup] Google Sign-In notice:', err);
       const code = err?.code || '';
       if (code === 'auth/popup-closed-by-user') {
-        setError('Sign-in popup was closed before completing authentication.');
+        // Soft notice instead of harsh error
+        setError('Google sign-in was cancelled. Click continue with Google to try again.');
       } else if (code === 'auth/popup-blocked') {
         setError('Sign-in popup was blocked by your browser. Please allow popups for this site.');
       } else if (code === 'auth/account-exists-with-different-credential') {

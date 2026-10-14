@@ -7,7 +7,9 @@ import { safeFetchJson } from '../../utils/safeFetch';
  * Service to retrieve general ocean observation summaries and dashboard telemetry
  */
 export class OceanDataService {
-  private baseUrl = APP_CONFIG.api.baseUrl;
+  private get baseUrl(): string {
+    return APP_CONFIG.api.baseUrl;
+  }
 
   async getSystemStats(): Promise<OceanSystemStats> {
     try {

@@ -1,6 +1,44 @@
 import { OceanVariable } from '../types';
 
 /**
+ * Resolves the backend API base URL safely according to environment and host runtime.
+ * Guarantees that production deployments never silently fall back or connect to localhost.
+ */
+export function resolveApiBaseUrl(): string {
+  const isBrowser = typeof window !== 'undefined';
+  const isLocalhostHost = isBrowser && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === '0.0.0.0' ||
+    window.location.hostname.endsWith('.local')
+  );
+
+  const rawEnv = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
+
+  if (rawEnv) {
+    const isLocalhostTarget = rawEnv.includes('localhost') || rawEnv.includes('127.0.0.1');
+
+    // Only allow pointing to localhost if we are actually executing on localhost
+    if (!isLocalhostTarget || isLocalhostHost || !isBrowser) {
+      const sanitized = rawEnv.replace(/\/+$/, '');
+      return sanitized.endsWith('/api/v1') ? sanitized : `${sanitized}/api/v1`;
+    }
+  }
+
+  // If running locally without an explicit target URL, use local FastAPI default
+  if (isLocalhostHost) {
+    return 'http://localhost:8000/api/v1';
+  }
+
+  // Deployed host: If on Firebase Hosting and no env URL set, route to verified Vercel FastAPI backend
+  if (isBrowser && (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))) {
+    return 'https://sih-project-space-x6.vercel.app/api/v1';
+  }
+
+  return '/api/v1';
+}
+
+/**
  * Global Application Configuration
  * Centralized settings to prevent hardcoded values across components
  */
@@ -12,14 +50,9 @@ export const APP_CONFIG = {
   
   // API settings
   api: {
-    baseUrl: (() => {
-      const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
-      if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-        const trimmed = envUrl.trim().replace(/\/+$/, '');
-        return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
-      }
-      return '/api/v1';
-    })(),
+    get baseUrl(): string {
+      return resolveApiBaseUrl();
+    },
     timeoutMs: 10000,
     enableMockData: import.meta.env.VITE_ENABLE_MOCK_DATA === 'true',
   },

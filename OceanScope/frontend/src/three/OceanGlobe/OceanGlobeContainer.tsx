@@ -94,7 +94,13 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
       {/* Three.js R3F Canvas */}
       <Canvas
         camera={{ position: [0, 1.2, 4.8], fov: 42 }}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, powerPreference: 'default' }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[OceanScope] WebGL context lost. Attempting restoration.');
+          }, false);
+        }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         {/* Lighting */}

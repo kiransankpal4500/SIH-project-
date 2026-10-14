@@ -10,6 +10,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
@@ -74,13 +76,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Process any returning Google redirect credentials on mount
+    getRedirectResult(auth)
+      .then((cred) => {
+        if (cred?.user) {
+          syncUserToFirestore(cred.user);
+        }
+      })
+      .catch((err) => {
+        console.warn('[AuthContext] Google redirect result notice:', err);
+      });
+
+    // Safety timeout: prevent auth state listener from staying in loading state indefinitely
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
     // Single shared listener for Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      clearTimeout(safetyTimer);
       setCurrentUser(user);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   const signup = async (email: string, password: string, displayName: string): Promise<UserCredential> => {
@@ -113,9 +135,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async (): Promise<UserCredential> => {
-    const cred = await signInWithPopup(auth, googleProvider);
-    await syncUserToFirestore(cred.user);
-    return cred;
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      await syncUserToFirestore(cred.user);
+      return cred;
+    } catch (popupErr: any) {
+      // If popup was blocked or failed with COOP policy, fallback to redirect-based sign-in
+      if (
+        popupErr?.code === 'auth/popup-blocked' ||
+        popupErr?.message?.includes('Cross-Origin-Opener-Policy')
+      ) {
+        console.warn('[AuthContext] Popup blocked or COOP restricted, initiating redirect sign-in...');
+        await signInWithRedirect(auth, googleProvider);
+        throw new Error('Redirecting to Google Sign-In...');
+      }
+      throw popupErr;
+    }
   };
 
   const logout = async (): Promise<void> => {

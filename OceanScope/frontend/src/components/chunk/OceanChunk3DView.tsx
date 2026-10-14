@@ -3,7 +3,7 @@
  * Renders volumetric ocean water column, GEBCO bathymetric seabed mesh, current particles, and marine life.
  */
 
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
@@ -118,6 +118,12 @@ const SeabedTerrain: React.FC<{
 
     return { geometry: geom };
   }, [depths, maxDepth, res]);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+    };
+  }, [geometry]);
 
   return (
     <mesh ref={meshRef} geometry={geometry} receiveShadow castShadow>
@@ -413,7 +419,13 @@ export const OceanChunk3DView: React.FC<OceanChunk3DViewProps> = ({
       <Canvas
         camera={{ position: [2.8, 2.3, 3.4], fov: 45 }}
         shadows
-        gl={{ antialias: true, toneMappingExposure: 1.25 }}
+        gl={{ antialias: true, toneMappingExposure: 1.25, powerPreference: 'default' }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[OceanScope Chunk] WebGL context lost. Attempting restoration.');
+          }, false);
+        }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         <ambientLight intensity={ambientIntensity} color="#E0F2FE" />

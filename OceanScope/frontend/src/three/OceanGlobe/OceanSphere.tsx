@@ -300,6 +300,15 @@ export const OceanSphere: React.FC<OceanSphereProps> = ({
     return createFallbackProceduralTexture(variable, depth);
   }, [nasaImage, hasError, variable, depth]);
 
+  // Dispose previous texture on variable/depth updates or unmount to prevent WebGL context loss
+  useEffect(() => {
+    return () => {
+      if (texture) {
+        texture.dispose();
+      }
+    };
+  }, [texture]);
+
   return (
     <mesh
       onClick={(e) => {

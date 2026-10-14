@@ -1,0 +1,25 @@
+{
+  "name": "OceanScope — Oceanographic Research Platform",
+  "short_name": "OceanScope",
+  "description": "Scientific 3D oceanographic visualization and operational model verification platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B84C6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/oceanscope-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/oceanscope-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

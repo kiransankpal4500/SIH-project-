@@ -3,8 +3,13 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix OceanScope/frontend run dev",
+    "dev:backend": "python -m uvicorn main:app --app-dir OceanScope/backend --reload --port 8000",
     "build": "npm --prefix OceanScope/frontend run build",
-    "install": "npm --prefix OceanScope/frontend install",
-    "deploy:firebase": "npm --prefix OceanScope/frontend run build && firebase deploy --only hosting"
+    "install:frontend": "npm --prefix OceanScope/frontend install --legacy-peer-deps",
+    "deploy:firebase": "npm --prefix OceanScope/frontend run build && firebase deploy --only hosting",
+    "deploy:firebase:all": "npm --prefix OceanScope/frontend run build && firebase deploy --only hosting,firestore:rules,firestore:indexes",
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:vercel": "vercel --prod",
+    "deploy:docker": "docker compose up -d --build"
   }
 }

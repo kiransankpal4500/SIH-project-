@@ -4,7 +4,9 @@ import { RISK_DISCLAIMER } from '../../config/riskConfig';
 import { safeFetchJson } from '../../utils/safeFetch';
 
 export class RiskApiClient {
-  private baseUrl = APP_CONFIG.api.baseUrl;
+  private get baseUrl(): string {
+    return APP_CONFIG.api.baseUrl;
+  }
 
   async getRiskAlerts(demo: boolean = false): Promise<RegionalRiskHotspot[]> {
     try {

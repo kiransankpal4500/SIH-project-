@@ -39,16 +39,16 @@ firebase_production_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 ]
-if "*" in configured_origins:
-    cors_origins = ["*"]
-else:
-    cors_origins = list(set(configured_origins + firebase_production_origins))
+cors_origins = list(set(
+    [o for o in configured_origins if o != "*"] + firebase_production_origins
+))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=cors_origins if cors_origins else ["*"],
+    allow_origin_regex=r"https://.*" if "*" in configured_origins else None,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 

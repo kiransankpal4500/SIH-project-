@@ -14,8 +14,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine redirect destination after successful sign-in
-  const from = (location.state as any)?.from?.pathname || '/explorer';
+  // Determine redirect destination after successful sign-in (default to landing page)
+  const from = (location.state as any)?.from?.pathname || '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,10 +77,14 @@ export const LoginPage: React.FC = () => {
       await loginWithGoogle();
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error('[Login] Google authentication failure:', err);
+      console.error('[Login] Google authentication notice:', err);
       const code = err?.code || '';
+      if (err?.message?.includes('Redirecting to Google')) {
+        // Redirection in progress, keep loading state
+        return;
+      }
       if (code === 'auth/popup-closed-by-user') {
-        setError('Google sign-in popup was closed before finishing.');
+        setError('Google sign-in was cancelled. Click continue with Google to try again.');
       } else if (code === 'auth/popup-blocked') {
         setError('Popup was blocked by your browser. Please allow popups for this domain.');
       } else if (code === 'auth/account-exists-with-different-credential') {
