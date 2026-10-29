@@ -1,4 +1,11 @@
+/**
+ * OceanScope 4D Ocean Global Explorer
+ * Restored original Three.js Ocean Globe explorer with interactive location selection,
+ * in-situ float tracking, 4D playback controls, and seamless 3D Ocean Chunk simulation.
+ */
+
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { OceanGlobeContainer } from '../../three/OceanGlobe/OceanGlobeContainer';
 import { GlobePlayerControlBar } from '../../components/player/GlobePlayerControlBar';
 import { DepthProfileChart } from '../../components/charts/DepthProfileChart';
@@ -11,7 +18,6 @@ import {
   ChevronDown,
   ChevronUp,
   MapPin,
-  Database,
   Activity,
   ShieldAlert,
   BarChart3,
@@ -22,13 +28,62 @@ import {
 import { formatCoordinates, formatValue } from '../../utils/formatters';
 
 export const ExplorerPage: React.FC = () => {
-  const { state, selectLocation, evaluateLocationRisk } = useOceanContext();
+  const { state, selectLocation } = useOceanContext();
 
   const [showCurrents, setShowCurrents] = useState<boolean>(true);
   const [showPoints, setShowPoints] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [activeSection, setActiveSection] = useState<string | null>('profiles');
-  const [activeOceanChunk, setActiveOceanChunk] = useState<{ lat: number; lon: number } | null>(null);
+  const [activeOceanChunk, setActiveOceanChunk] = useState<{ lat: number; lon: number } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isChunk = params.get('chunk') === 'true';
+      const lat = parseFloat(params.get('lat') || '');
+      const lon = parseFloat(params.get('lon') || '');
+      if (isChunk && !isNaN(lat) && !isNaN(lon)) {
+        return { lat, lon };
+      }
+    }
+    return null;
+  });
+
+  // On initial mount: sync URL query params into state if coordinates are provided
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const lat = parseFloat(params.get('lat') || '');
+      const lon = parseFloat(params.get('lon') || '');
+      if (!isNaN(lat) && !isNaN(lon)) {
+        selectLocation(lat, lon, state.selectedDepth, state.selectedTimestamp);
+      }
+    }
+  }, []);
+
+  // Update URL search parameters when location or chunk changes without full page reload
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (activeOceanChunk) {
+        url.searchParams.set('lat', activeOceanChunk.lat.toFixed(4));
+        url.searchParams.set('lon', activeOceanChunk.lon.toFixed(4));
+        url.searchParams.set('chunk', 'true');
+      } else if (state.selectedRiskLocation) {
+        url.searchParams.set('lat', state.selectedRiskLocation.lat.toFixed(4));
+        url.searchParams.set('lon', state.selectedRiskLocation.lon.toFixed(4));
+        url.searchParams.delete('chunk');
+      } else if (state.selectedLiveArgoProfile) {
+        const lat = state.selectedLiveArgoProfile.latitude;
+        const lon = state.selectedLiveArgoProfile.longitude;
+        if (lat != null && lon != null) {
+          url.searchParams.set('lat', lat.toFixed(4));
+          url.searchParams.set('lon', lon.toFixed(4));
+        }
+        url.searchParams.delete('chunk');
+      }
+      url.searchParams.delete('split');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [state.selectedRiskLocation, state.selectedLiveArgoProfile, activeOceanChunk]);
 
   // ESC exits fullscreen or chunk view
   useEffect(() => {
@@ -98,7 +153,7 @@ export const ExplorerPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-[#0B84C6] shrink-0" />
           <span>
-            <strong>New Feature:</strong> Double-click anywhere on the ocean globe to launch the <strong>3D Ocean Chunk Simulation</strong> (Real GEBCO Seabed + Copernicus Ocean Data).
+            <strong>Interactive Exploration:</strong> Click anywhere on the ocean globe to inspect parameters, or double-click to launch the <strong>3D Ocean Chunk Simulation</strong> (Real GEBCO Seabed + Copernicus Ocean Data).
           </span>
         </div>
         <button
@@ -212,6 +267,16 @@ export const ExplorerPage: React.FC = () => {
                 <Layers className="w-3.5 h-3.5" />
                 <span>3D Ocean Chunk</span>
               </button>
+
+              {/* Ask AI Assistant Button */}
+              <Link
+                to={`/assistant?lat=${currentCoords.lat.toFixed(4)}&lon=${currentCoords.lon.toFixed(4)}`}
+                className="px-3 py-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] border border-[#BBF7D0] text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors"
+                title="Ask AI Research Assistant about this location"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Ask AI Assistant</span>
+              </Link>
             </div>
           </div>
         </div>

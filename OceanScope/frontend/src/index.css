@@ -39,3 +39,55 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
 }
+
+/* ==========================================================================
+   Chunk Explorer — Style 4: Ultra Rounded, Soft & Minimal Design Tokens
+   ========================================================================== */
+.chunk-explorer-theme {
+  --chunk-bg-main: #F7F9FC;
+  --chunk-bg-card: #FFFFFF;
+  --chunk-bg-surface: #F8FAFC;
+  --chunk-text-primary: #172B4D;
+  --chunk-text-secondary: #64748B;
+  --chunk-accent-blue: #087FC4;
+  --chunk-active-blue: #0568A6;
+  --chunk-selected-surface: #EAF5FF;
+  --chunk-border: #E2EAF2;
+  --chunk-shadow: 0 6px 24px rgba(22, 43, 77, 0.045);
+  --chunk-shadow-hover: 0 10px 30px rgba(22, 43, 77, 0.07);
+}
+
+.chunk-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E2EAF2;
+  box-shadow: 0 6px 24px rgba(22, 43, 77, 0.045);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chunk-card:hover {
+  box-shadow: 0 10px 30px rgba(22, 43, 77, 0.07);
+}
+
+/* Scientific Print & PDF Export Styles */
+@media print {
+  @page {
+    margin: 1.2cm;
+    size: A4 portrait;
+  }
+  body {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .print-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+

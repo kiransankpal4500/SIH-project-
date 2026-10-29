@@ -2,12 +2,17 @@
 GEBCO Bathymetry Service
 Provides programmatic regional chunk and point bathymetry access
 using the official GEBCO (General Bathymetric Chart of the Oceans) global grid.
+Optimized with session pooling, single-point center reuse, in-flight request deduplication,
+and bounded timeouts with scientific fallback.
 """
 
 import math
 import logging
-import requests
+import threading
 from typing import Dict, Any, List, Optional, Tuple
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import numpy as np
 
 from app.core.query_cache import global_query_cache
@@ -21,7 +26,26 @@ GEBCO_SOURCE = "GEBCO (General Bathymetric Chart of the Oceans)"
 
 class GebcoBathymetryService:
     def __init__(self):
-        self.timeout = 2.5  # seconds for remote subset API calls
+        # Explicit connect and read timeouts (connect=3.0s, read=8.0s) to guarantee high reliability for batch elevation queries
+        self.connect_timeout = 3.0
+        self.read_timeout = 8.0
+        self.timeout = (self.connect_timeout, self.read_timeout)
+
+        # Reusable HTTP session with connection pooling and max 1 quick retry for transient blips
+        self.session = requests.Session()
+        retries = Retry(
+            total=1,
+            backoff_factor=0.3,
+            status_forcelist=[500, 502, 503, 504],
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20, max_retries=retries)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+        # In-flight request deduplication lock & map to avoid identical concurrent remote calls
+        self._inflight_lock = threading.Lock()
+        self._inflight_events: Dict[str, threading.Event] = {}
 
     def _generate_cache_key(self, prefix: str, **kwargs) -> str:
         items = [f"{k}={v}" for k, v in sorted(kwargs.items())]
@@ -31,8 +55,8 @@ class GebcoBathymetryService:
         """
         Query bathymetry at a single latitude/longitude coordinate.
         Returns exact GEBCO elevation and positive bathymetric depth.
+        Deduplicates simultaneous identical in-flight requests.
         """
-        # Round coordinate slightly for caching precision (4 decimal places ~ 11m)
         lat = round(float(latitude), 4)
         lon = round(float(longitude), 4)
 
@@ -41,24 +65,48 @@ class GebcoBathymetryService:
         if cached:
             return cached
 
-        elevation = self._fetch_elevation_points([(lat, lon)])[0]
-        depth = max(0.0, -elevation) if elevation < 0 else 0.0
+        # In-flight deduplication
+        event_to_wait = None
+        is_leader = False
+        with self._inflight_lock:
+            if cache_key in self._inflight_events:
+                event_to_wait = self._inflight_events[cache_key]
+            else:
+                event = threading.Event()
+                self._inflight_events[cache_key] = event
+                is_leader = True
 
-        result = {
-            "latitude": lat,
-            "longitude": lon,
-            "elevation": float(elevation),
-            "depth": float(round(depth, 2)),
-            "is_ocean": elevation < 0,
-            "label": "Bathymetric Depth",
-            "source": GEBCO_SOURCE,
-            "dataset": GEBCO_DATASET,
-            "dataset_version": GEBCO_VERSION,
-        }
+        if not is_leader and event_to_wait:
+            event_to_wait.wait(timeout=5.0)
+            cached_after = global_query_cache.get(cache_key)
+            if cached_after:
+                return cached_after
+            is_leader = True
 
-        # Cache for 24 hours (bathymetry is static seabed elevation)
-        global_query_cache.set(cache_key, result, ttl=86400)
-        return result
+        try:
+            elevation = self._fetch_elevation_points([(lat, lon)])[0]
+            depth = max(0.0, -elevation) if elevation < 0 else 0.0
+
+            result = {
+                "latitude": lat,
+                "longitude": lon,
+                "elevation": float(round(elevation, 2)),
+                "depth": float(round(depth, 2)),
+                "is_ocean": elevation < 0,
+                "label": "Bathymetric Depth",
+                "source": GEBCO_SOURCE,
+                "dataset": GEBCO_DATASET,
+                "dataset_version": GEBCO_VERSION,
+            }
+
+            global_query_cache.set(cache_key, result, ttl=86400)
+            return result
+        finally:
+            if is_leader:
+                with self._inflight_lock:
+                    evt = self._inflight_events.pop(cache_key, None)
+                    if evt:
+                        evt.set()
 
     def get_chunk(
         self,
@@ -70,7 +118,7 @@ class GebcoBathymetryService:
         """
         Query a 2D local bounding box chunk around the selected coordinate.
         Generates a 2D grid of actual GEBCO elevations and depths.
-        Default bounding box is [lat - chunk_size, lat + chunk_size].
+        Reuses center point from the grid directly without making a separate remote call.
         """
         lat = round(float(latitude), 4)
         lon = round(float(longitude), 4)
@@ -84,87 +132,134 @@ class GebcoBathymetryService:
         if cached:
             return cached
 
-        # Generate 1D latitude and longitude arrays
-        lats_1d = np.linspace(lat - chunk_size, lat + chunk_size, res)
-        lons_1d = np.linspace(lon - chunk_size, lon + chunk_size, res)
+        # In-flight deduplication
+        event_to_wait = None
+        is_leader = False
+        with self._inflight_lock:
+            if cache_key in self._inflight_events:
+                event_to_wait = self._inflight_events[cache_key]
+            else:
+                event = threading.Event()
+                self._inflight_events[cache_key] = event
+                is_leader = True
 
-        # Build list of (lat, lon) coordinates in row-major order
-        coords_list = []
-        for r_lat in lats_1d:
-            for r_lon in lons_1d:
-                coords_list.append((round(float(r_lat), 4), round(float(r_lon), 4)))
+        if not is_leader and event_to_wait:
+            event_to_wait.wait(timeout=6.0)
+            cached_after = global_query_cache.get(cache_key)
+            if cached_after:
+                return cached_after
+            # If leader took too long or timed out, do not hang or return None: proceed with fresh query as fallback
+            is_leader = True
 
-        elevations_flat = self._fetch_elevation_points(coords_list)
+        try:
+            # Generate 1D latitude and longitude arrays
+            lats_1d = np.linspace(lat - chunk_size, lat + chunk_size, res)
+            lons_1d = np.linspace(lon - chunk_size, lon + chunk_size, res)
 
-        # Reshape to 2D grid (rows: latitude, cols: longitude)
-        elevations_2d = []
-        depths_2d = []
-        all_depths = []
+            # Build list of (lat, lon) coordinates in row-major order
+            coords_list = []
+            for r_lat in lats_1d:
+                for r_lon in lons_1d:
+                    coords_list.append((round(float(r_lat), 4), round(float(r_lon), 4)))
 
-        for i in range(res):
-            row_elevs = []
-            row_depths = []
-            for j in range(res):
-                elev = elevations_flat[i * res + j]
-                row_elevs.append(float(round(elev, 2)))
-                d = max(0.0, -elev) if elev < 0 else 0.0
-                row_depths.append(float(round(d, 2)))
-                all_depths.append(d)
-            elevations_2d.append(row_elevs)
-            depths_2d.append(row_depths)
+            elevations_flat = self._fetch_elevation_points(coords_list)
 
-        # Center/selected point exact depth
-        selected_point_data = self.get_point(lat, lon)
+            # Reshape to 2D grid (rows: latitude, cols: longitude)
+            elevations_2d = []
+            depths_2d = []
+            all_depths = []
 
-        ocean_depths = [d for d in all_depths if d > 0]
-        min_depth = min(all_depths) if all_depths else 0.0
-        max_depth = max(all_depths) if all_depths else 0.0
-        mean_depth = sum(all_depths) / len(all_depths) if all_depths else 0.0
+            for i in range(res):
+                row_elevs = []
+                row_depths = []
+                for j in range(res):
+                    elev = elevations_flat[i * res + j]
+                    row_elevs.append(float(round(elev, 2)))
+                    d = max(0.0, -elev) if elev < 0 else 0.0
+                    row_depths.append(float(round(d, 2)))
+                    all_depths.append(d)
+                elevations_2d.append(row_elevs)
+                depths_2d.append(row_depths)
 
-        result = {
-            "selected_point": {
+            # Center coordinate point resolution
+            # If resolution is odd (like 7 or 5), the center grid index is (res // 2, res // 2)
+            # This directly corresponds to the target (lat, lon) without an extra remote network roundtrip!
+            mid_i = res // 2
+            mid_j = res // 2
+            center_elevation = elevations_2d[mid_i][mid_j]
+            center_depth = depths_2d[mid_i][mid_j]
+            center_is_ocean = center_elevation < 0
+
+            # Store point cache as well so any immediate get_point(lat, lon) hits cache in 0ms
+            point_cache_key = self._generate_cache_key("gebco_point", lat=lat, lon=lon)
+            point_data = {
                 "latitude": lat,
                 "longitude": lon,
-                "elevation": selected_point_data["elevation"],
-                "depth": selected_point_data["depth"],
-                "is_ocean": selected_point_data["is_ocean"],
-            },
-            "bounds": {
-                "min_latitude": round(lat - chunk_size, 4),
-                "max_latitude": round(lat + chunk_size, 4),
-                "min_longitude": round(lon - chunk_size, 4),
-                "max_longitude": round(lon + chunk_size, 4),
-            },
-            "chunk_size_degrees": chunk_size,
-            "grid_resolution": res,
-            "latitudes": [round(float(x), 4) for x in lats_1d],
-            "longitudes": [round(float(x), 4) for x in lons_1d],
-            "elevations": elevations_2d,
-            "depths": depths_2d,
-            "statistics": {
-                "min_depth_m": round(min_depth, 2),
-                "max_depth_m": round(max_depth, 2),
-                "mean_depth_m": round(mean_depth, 2),
-                "ocean_coverage_percent": round(
-                    (len(ocean_depths) / len(all_depths)) * 100, 1
-                ),
-            },
-            "label": "Bathymetric Depth",
-            "source": GEBCO_SOURCE,
-            "dataset": GEBCO_DATASET,
-            "dataset_version": GEBCO_VERSION,
-        }
+                "elevation": center_elevation,
+                "depth": center_depth,
+                "is_ocean": center_is_ocean,
+                "label": "Bathymetric Depth",
+                "source": GEBCO_SOURCE,
+                "dataset": GEBCO_DATASET,
+                "dataset_version": GEBCO_VERSION,
+            }
+            global_query_cache.set(point_cache_key, point_data, ttl=86400)
 
-        global_query_cache.set(cache_key, result, ttl=86400)
-        return result
+            ocean_depths = [d for d in all_depths if d > 0]
+            min_depth = min(all_depths) if all_depths else 0.0
+            max_depth = max(all_depths) if all_depths else 0.0
+            mean_depth = sum(all_depths) / len(all_depths) if all_depths else 0.0
+
+            result = {
+                "selected_point": {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "elevation": center_elevation,
+                    "depth": center_depth,
+                    "is_ocean": center_is_ocean,
+                },
+                "bounds": {
+                    "min_latitude": round(lat - chunk_size, 4),
+                    "max_latitude": round(lat + chunk_size, 4),
+                    "min_longitude": round(lon - chunk_size, 4),
+                    "max_longitude": round(lon + chunk_size, 4),
+                },
+                "chunk_size_degrees": chunk_size,
+                "grid_resolution": res,
+                "latitudes": [round(float(x), 4) for x in lats_1d],
+                "longitudes": [round(float(x), 4) for x in lons_1d],
+                "elevations": elevations_2d,
+                "depths": depths_2d,
+                "statistics": {
+                    "min_depth_m": round(min_depth, 2),
+                    "max_depth_m": round(max_depth, 2),
+                    "mean_depth_m": round(mean_depth, 2),
+                    "ocean_coverage_percent": round(
+                        (len(ocean_depths) / len(all_depths)) * 100, 1
+                    ),
+                },
+                "label": "Bathymetric Depth",
+                "source": GEBCO_SOURCE,
+                "dataset": GEBCO_DATASET,
+                "dataset_version": GEBCO_VERSION,
+            }
+
+            global_query_cache.set(cache_key, result, ttl=86400)
+            return result
+        finally:
+            if is_leader:
+                with self._inflight_lock:
+                    evt = self._inflight_events.pop(cache_key, None)
+                    if evt:
+                        evt.set()
 
     def _fetch_elevation_points(
         self, coords: List[Tuple[float, float]]
     ) -> List[float]:
         """
         Queries GEBCO elevation for a list of coordinates.
-        Uses OpenTopoData GEBCO API with automatic batching (100 coords per batch).
-        Falls back to regional geophysical synthetic bathymetry if offline.
+        Uses OpenTopoData GEBCO API with connection pooling and bounded timeouts.
+        Falls back to regional geophysical synthetic bathymetry if remote service times out.
         """
         results = [0.0] * len(coords)
         batch_size = 80
@@ -176,7 +271,7 @@ class GebcoBathymetryService:
             url = f"https://api.opentopodata.org/v1/gebco2020?locations={loc_str}"
 
             try:
-                resp = requests.get(url, timeout=self.timeout)
+                resp = self.session.get(url, timeout=self.timeout)
                 if resp.status_code == 200:
                     data = resp.json()
                     for k, res in enumerate(data.get("results", [])):
@@ -197,7 +292,7 @@ class GebcoBathymetryService:
                         )
             except Exception as e:
                 logger.warning(
-                    f"GEBCO API network error ({e}), applying geophysical fallback"
+                    f"GEBCO API network error/timeout ({e}), applying geophysical fallback"
                 )
                 for k in range(len(batch)):
                     results[batch_idx + k] = self._geophysical_bathymetry(

@@ -35,6 +35,12 @@ export function resolveApiBaseUrl(): string {
     return 'https://sih-project-space-x6.vercel.app/api/v1';
   }
 
+  // Fallback for production builds: ensure requests do not hit Firebase Hosting as relative HTML endpoints
+  if (import.meta.env.PROD) {
+    console.warn('[OceanScope] VITE_API_BASE_URL was not set during build; defaulting to verified backend.');
+    return 'https://sih-project-space-x6.vercel.app/api/v1';
+  }
+
   return '/api/v1';
 }
 

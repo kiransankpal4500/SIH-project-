@@ -65,9 +65,9 @@ export const SignupPage: React.FC = () => {
     try {
       await signup(email.trim(), password, fullName.trim());
       setSuccessMessage('Account created successfully! We sent a verification link to your email.');
-      // After brief confirmation, navigate to explorer or dashboard
+      // After brief confirmation, navigate to application Home Page
       setTimeout(() => {
-        navigate('/explorer');
+        navigate('/home');
       }, 2000);
     } catch (err: any) {
       console.error('[Signup] Error creating account:', err);
@@ -96,7 +96,7 @@ export const SignupPage: React.FC = () => {
 
     try {
       await loginWithGoogle();
-      navigate('/');
+      navigate('/home');
     } catch (err: any) {
       console.error('[Signup] Google Sign-In notice:', err);
       const code = err?.code || '';

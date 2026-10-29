@@ -14,8 +14,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine redirect destination after successful sign-in (default to landing page)
-  const from = (location.state as any)?.from?.pathname || '/';
+  // Determine redirect destination after successful sign-in (default to application Home Page)
+  const from = (location.state as any)?.from?.pathname || '/home';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

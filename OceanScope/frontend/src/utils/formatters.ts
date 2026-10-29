@@ -7,12 +7,23 @@ export function formatValue(value: number | undefined, unit: string, decimals = 
 }
 
 /**
- * Format latitude and longitude coordinates in standard DMS / DD notation
+ * Format latitude and longitude coordinates in standard oceanographic notation.
+ * Prevents NaN outputs and formats cardinal hemispheres cleanly.
  */
-export function formatCoordinates(lat: number, lon: number): string {
-  const latDir = lat >= 0 ? 'N' : 'S';
-  const lonDir = lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(lat).toFixed(2)}°${latDir}, ${Math.abs(lon).toFixed(2)}°${lonDir}`;
+export function formatCoordinates(
+  lat: number | undefined | null,
+  lon: number | undefined | null,
+  precision = 4
+): string {
+  if (lat == null || lon == null) return 'Coordinates Unavailable';
+  const latNum = Number(lat);
+  const lonNum = Number(lon);
+  if (isNaN(latNum) || isNaN(lonNum) || !isFinite(latNum) || !isFinite(lonNum)) {
+    return 'Coordinates Unavailable';
+  }
+  const latDir = latNum >= 0 ? 'N' : 'S';
+  const lonDir = lonNum >= 0 ? 'E' : 'W';
+  return `${Math.abs(latNum).toFixed(precision)}° ${latDir}, ${Math.abs(lonNum).toFixed(precision)}° ${lonDir}`;
 }
 
 /**

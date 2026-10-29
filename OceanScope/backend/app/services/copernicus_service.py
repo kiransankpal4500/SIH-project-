@@ -139,6 +139,12 @@ class CopernicusMarineService:
             except Exception:
                 pass
 
+        # Guard: If Copernicus credentials are not configured, fail fast rather than hanging on interactive prompt
+        if not self.username or not self.password:
+            raise ValueError(
+                "Copernicus Marine credentials (COPERNICUSMARINE_SERVICE_USERNAME / PASSWORD) are not configured."
+            )
+
         # Precise depth bounding for performance
         min_d = 0.0 if is_profile else max(0.0, depth - 5.0)
         max_d = 1000.0 if is_profile else min(1000.0, max(5.0, depth + 5.0))

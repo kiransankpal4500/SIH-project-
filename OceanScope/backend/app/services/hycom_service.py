@@ -186,7 +186,37 @@ class INCOISHYCOMService:
         if ds is None or not filename:
             raise ValueError("No valid HYCOM dataset available for point query.")
 
-        nc_var = var_mapping.get(variable, variable)
+        # Canonical alias handling
+        var_key = variable.lower().strip()
+        if var_key in ("height", "ssh", "sea_height", "zeta0"):
+            nc_var = var_mapping.get("ssh", "SSH")
+            canonical_var = "height"
+        elif var_key in ("mld", "mixed_layer"):
+            nc_var = var_mapping.get("mld", "MLD")
+            canonical_var = "mld"
+        elif var_key in ("current", "velocity", "speed"):
+            curr = self.get_current(latitude, longitude, depth, time_str)
+            return OceanModelPoint(
+                source=curr.source,
+                provider=curr.provider,
+                model=curr.model,
+                dataset=curr.dataset,
+                retrieved_at=curr.retrieved_at,
+                latitude=curr.latitude,
+                longitude=curr.longitude,
+                depth=curr.depth,
+                time=curr.time,
+                model_time=curr.model_time,
+                variable="current",
+                value=curr.speed,
+                unit="m/s",
+                selected_file=curr.selected_file,
+                time_difference_hours=curr.time_difference_hours,
+            )
+        else:
+            nc_var = var_mapping.get(var_key, var_key)
+            canonical_var = var_key
+
         if nc_var not in ds.data_vars:
             raise ValueError(f"Variable '{variable}' (mapped as '{nc_var}') not found in dataset '{filename}'.")
 
@@ -211,7 +241,36 @@ class INCOISHYCOMService:
         actual_lon = float(sliced[lon_dim].values.item()) if lon_dim in sliced.coords else longitude
         actual_depth = float(sliced[depth_dim].values.item()) if depth_dim in sliced.coords else depth
 
-        unit = str(ds[nc_var].attrs.get("units", "degC" if variable == "temperature" else "PSU"))
+        canonical_units = {
+            "temperature": "°C",
+            "salinity": "PSU",
+            "current_u": "m/s",
+            "current_v": "m/s",
+            "current": "m/s",
+            "ssh": "m",
+            "height": "m",
+            "mld": "m",
+            "tchp": "KJ/cm²",
+        }
+        unit = canonical_units.get(canonical_var, str(ds[nc_var].attrs.get("units", "m" if canonical_var in ("mld", "height") else "°C")))
+
+        # Physical MLD calculation if field is 0.0 or unavailable (UNESCO temperature gradient criterion ΔT = 0.2°C)
+        if canonical_var == "mld" and (val <= 0.0 or np.isnan(val)):
+            try:
+                prof = self.get_profile(latitude, longitude, time_str)
+                if prof and prof.profile and len(prof.profile) > 1:
+                    t0_val = prof.profile[0].temperature
+                    if t0_val is not None:
+                        for idx_p in range(1, len(prof.profile)):
+                            tp = prof.profile[idx_p].temperature
+                            if tp is not None and tp <= (t0_val - 0.2):
+                                z0 = prof.profile[idx_p - 1].depth
+                                z1 = prof.profile[idx_p].depth
+                                t_prev = prof.profile[idx_p - 1].temperature or t0_val
+                                val = z0 + (z1 - z0) * ((t0_val - 0.2) - t_prev) / (tp - t_prev) if (tp != t_prev) else z0
+                                break
+            except Exception as ex:
+                logger.debug(f"Note on MLD derivation: {ex}")
 
         res = OceanModelPoint(
             source="INCOIS",
@@ -224,7 +283,7 @@ class INCOISHYCOMService:
             depth=actual_depth,
             time=time_str or sel_model_time or "latest",
             model_time=sel_model_time or "latest",
-            variable=variable,
+            variable=canonical_var,
             value=round(val, 4) if not np.isnan(val) else 0.0,
             unit=unit,
             selected_file=filename,
@@ -236,6 +295,7 @@ class INCOISHYCOMService:
             f"file={filename} dt={sel_model_time} in {(time.time() - t0)*1000:.2f}ms"
         )
         return res
+
 
     def get_profile(
         self,
@@ -427,7 +487,84 @@ class INCOISHYCOMService:
         )
         return res
 
+    def get_all_parameters(
+        self,
+        latitude: float,
+        longitude: float,
+        depth: float = 0.0,
+        time_str: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Extract all 5 scientific parameters in a single pass with sub-second performance:
+        1. Temperature (°C)
+        2. Salinity (PSU)
+        3. Geostrophic Current (speed m/s, direction degrees, u & v components)
+        4. Mixed Layer Depth MLD (m)
+        5. Sea Height ζ0 (m)
+        """
+        self.validate_coordinates(latitude, longitude, depth)
+
+        # 1. Fetch individual parameters with cache-awareness
+        t_pt = self.get_point(latitude, longitude, depth, "temperature", time_str)
+        s_pt = self.get_point(latitude, longitude, depth, "salinity", time_str)
+        curr = self.get_current(latitude, longitude, depth, time_str)
+        m_pt = self.get_point(latitude, longitude, depth, "mld", time_str)
+        h_pt = self.get_point(latitude, longitude, 0.0, "ssh", time_str)
+
+        return {
+            "latitude": t_pt.latitude,
+            "longitude": t_pt.longitude,
+            "depth": depth,
+            "time": t_pt.time,
+            "model_time": t_pt.model_time,
+            "source": t_pt.source,
+            "provider": t_pt.provider,
+            "model": t_pt.model,
+            "dataset": t_pt.dataset,
+            "temperature": {
+                "key": "temperature",
+                "label": "Temperature",
+                "value": t_pt.value,
+                "unit": "°C",
+                "status": "available" if t_pt.value is not None else "unavailable",
+            },
+            "salinity": {
+                "key": "salinity",
+                "label": "Salinity",
+                "value": s_pt.value,
+                "unit": "PSU",
+                "status": "available" if s_pt.value is not None else "unavailable",
+            },
+            "current": {
+                "key": "current",
+                "label": "Geostrophic Current",
+                "speed": curr.speed,
+                "direction_degrees": curr.direction,
+                "u": curr.u,
+                "v": curr.v,
+                "unit": "m/s",
+                "status": "available",
+            },
+            "mld": {
+                "key": "mld",
+                "label": "Mixed Layer (MLD)",
+                "value": m_pt.value,
+                "unit": "m",
+                "threshold": "Δσ = 0.125 kg/m³",
+                "status": "available" if m_pt.value is not None and m_pt.value > 0 else "unavailable",
+            },
+            "height": {
+                "key": "height",
+                "label": "Sea Height (ζ0)",
+                "value": h_pt.value,
+                "unit": "m",
+                "definition": "Sea Surface Height Anomaly (Dynamic Topography)",
+                "status": "available" if h_pt.value is not None else "unavailable",
+            },
+        }
+
     def get_timeseries(
+
         self,
         latitude: float,
         longitude: float,

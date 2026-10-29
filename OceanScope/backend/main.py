@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.api.routes import observations, models, disasters, data_status, bathymetry, marine_life
+from app.api.routes import observations, models, disasters, data_status, bathymetry, marine_life, assistant
 
 # Configure structured logging
 logging.basicConfig(
@@ -25,31 +25,42 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS Middleware — configurable origins including Firebase production
-configured_origins = (
-    ["*"] if settings.CORS_ALLOWED_ORIGINS == "*"
-    else [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
-)
-firebase_production_origins = [
+# Known production Firebase Hosting origins for OceanScope
+FIREBASE_PRODUCTION_ORIGINS = [
     "https://oceanscope-d6305.web.app",
     "https://oceanscope-d6305.firebaseapp.com",
     "https://oceanscope-b3b88.web.app",
     "https://oceanscope-b3b88.firebaseapp.com",
+]
+
+# Development origins permitted during local development
+LOCAL_DEV_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
-cors_origins = list(set(
-    [o for o in configured_origins if o != "*"] + firebase_production_origins
+
+# Parse configured origins from environment (excluding wildcard '*' to maintain credentials safety)
+_configured = [
+    o.strip()
+    for o in settings.CORS_ALLOWED_ORIGINS.split(",")
+    if o.strip() and o.strip() != "*"
+]
+
+# Combined CORS origin allowlist (deduplicated preserving order)
+cors_origins = list(dict.fromkeys(
+    FIREBASE_PRODUCTION_ORIGINS + LOCAL_DEV_ORIGINS + _configured
 ))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if cors_origins else ["*"],
-    allow_origin_regex=r"https://.*" if "*" in configured_origins else None,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https:\/\/oceanscope-[a-z0-9]+(--[\w-]+)?\.(web\.app|firebaseapp\.com)$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Register API v1 Routers
@@ -59,6 +70,7 @@ app.include_router(disasters.router, prefix=settings.API_V1_STR)
 app.include_router(data_status.router, prefix=settings.API_V1_STR)
 app.include_router(bathymetry.router, prefix=settings.API_V1_STR)
 app.include_router(marine_life.router, prefix=settings.API_V1_STR)
+app.include_router(assistant.router, prefix=settings.API_V1_STR)
 
 
 @app.exception_handler(Exception)
@@ -98,8 +110,13 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_event():
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(ThreadPoolExecutor(max_workers=64, thread_name_prefix="asyncio_worker"))
     logger.info(f"OceanScope {settings.VERSION} starting on {settings.HOST}:{settings.PORT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"CORS origins: {cors_origins}")
     logger.info(f"HYCOM data directory: {settings.HYCOM_DATA_DIRECTORY}")
     logger.info(f"INCOIS ERDDAP: {settings.INCOIS_ERDDAP_BASE_URL}")
+

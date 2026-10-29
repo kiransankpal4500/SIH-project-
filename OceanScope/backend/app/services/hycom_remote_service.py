@@ -101,18 +101,7 @@ class HYCOMRemoteService:
         if self._initialized_time_index:
             return
 
-        try:
-            # Query the latest 2026 dataset time array to get the exact latest available timestamp
-            year_now = 2026
-            latest_url = f"{self.current_base_url}/t3z/{year_now}"
-            ds_latest = self._get_dataset(f"espc_t3z_{year_now}", latest_url)
-            if "time" in ds_latest:
-                tv = ds_latest["time"].values
-                max_h = float(tv[-1])
-                latest_dt = HYCOM_TIME_BASE + timedelta(hours=max_h)
-                self.latest_iso = latest_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        except Exception as e:
-            logger.warning(f"Could not dynamically query latest 2026 HYCOM time array: {e}")
+        # Static temporal bounds are established without blocking on remote THREDDS at startup
 
         # Construct comprehensive 3-hourly timeline from 2018-12-04 12:00 to latest_iso
         start_dt = datetime(2018, 12, 4, 12, 0, 0, tzinfo=timezone.utc)

@@ -34,6 +34,10 @@ class Settings:
     # CORS — configurable origins for production
     CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", os.getenv("CORS_ORIGINS", "*"))
 
+    # Google Gemini AI Integration Configuration (Phase 3)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
     # INCOIS ERDDAP Configuration
     INCOIS_ERDDAP_BASE_URL: str = os.getenv(
         "INCOIS_ERDDAP_BASE_URL", "https://erddap.incois.gov.in/erddap/"
@@ -43,7 +47,8 @@ class Settings:
     CACHE_EXPIRATION_SECONDS: int = int(os.getenv("CACHE_EXPIRATION_SECONDS", "600"))
 
     # HYCOM Model Storage & Remote Data Access Configuration
-    HYCOM_DATA_SOURCE: str = os.getenv("HYCOM_DATA_SOURCE", "remote").lower()
+    # Prioritizes local high-performance NetCDF archive (sub-second queries) with fallback capability
+    HYCOM_DATA_SOURCE: str = os.getenv("HYCOM_DATA_SOURCE", "local").lower()
     # Historical archive: GLBy0.08/expt_93.0 (Dec 2018 – Sep 2024)
     HYCOM_REMOTE_OPENDAP_URL: str = os.getenv(
         "HYCOM_REMOTE_OPENDAP_URL", "https://tds.hycom.org/thredds/dodsC/GLBy0.08/expt_93.0"
@@ -56,10 +61,22 @@ class Settings:
     HYCOM_CURRENT_DATASET_ID: str = os.getenv("HYCOM_CURRENT_DATASET_ID", "ESPC-D-V02")
     HYCOM_REMOTE_TIMEOUT_SECONDS: int = int(os.getenv("HYCOM_REMOTE_TIMEOUT_SECONDS", "15"))
     # In production container, default to persistent volume mount /data/hycom
-    HYCOM_DATA_DIRECTORY: str = os.getenv(
-        "HYCOM_DATA_DIRECTORY",
-        "/data/hycom" if os.path.exists("/data/hycom") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "netcdf", "hycom")
+    HYCOM_DATA_DIRECTORY: str = (
+        next(
+            (
+                p for p in [
+                    os.getenv("HYCOM_DATA_DIRECTORY", ""),
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "netcdf", "hycom"),
+                    os.path.join(os.getcwd(), "OceanScope", "backend", "data", "netcdf", "hycom"),
+                    os.path.join(os.getcwd(), "data", "netcdf", "hycom"),
+                    "/data/hycom",
+                ]
+                if p and os.path.exists(p)
+            ),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "netcdf", "hycom")
+        )
     )
+
 
     # Server Configuration
     HOST: str = os.getenv("HOST", "0.0.0.0")

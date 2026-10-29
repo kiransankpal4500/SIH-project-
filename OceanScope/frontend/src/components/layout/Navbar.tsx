@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, LogOut, ChevronDown, Sparkles } from 'lucide-react';
+import { useFullscreen } from '../../hooks/useFullscreen';
+import { User, LogOut, ChevronDown, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -9,10 +10,17 @@ export const Navbar: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const {
+    isFullscreen: isWebsiteFullscreen,
+    toggleFullscreen: toggleWebsiteFullscreen,
+    isSupported: isFullscreenSupported,
+  } = useFullscreen();
+
   const navItems = [
     { to: '/explorer', label: 'Explore' },
     { to: '/observations', label: 'Observations' },
     { to: '/analytics', label: 'Analytics' },
+    { to: '/assistant', label: 'AI Assistant' },
     { to: '/about', label: 'About' },
   ];
 
@@ -94,6 +102,23 @@ export const Navbar: React.FC = () => {
             </NavLink>
           ))}
         </div>
+
+        {/* Website Fullscreen Button */}
+        {isFullscreenSupported && (
+          <button
+            type="button"
+            onClick={toggleWebsiteFullscreen}
+            aria-label={isWebsiteFullscreen ? 'Exit website fullscreen' : 'Enter website fullscreen'}
+            title={isWebsiteFullscreen ? 'Exit website fullscreen (Esc)' : 'Enter website fullscreen'}
+            className="p-2 rounded-lg text-slate-600 hover:text-[#0B84C6] hover:bg-slate-100 transition-colors flex items-center justify-center cursor-pointer"
+          >
+            {isWebsiteFullscreen ? (
+              <Minimize2 className="w-4 h-4 text-[#0B84C6]" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </button>
+        )}
 
         {/* Auth Section in Top-Right Corner */}
         <div className="flex items-center pl-2 md:border-l md:border-slate-200">

@@ -93,6 +93,7 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
     >
       {/* Three.js R3F Canvas */}
       <Canvas
+        dpr={[1, 1.5]}
         camera={{ position: [0, 1.2, 4.8], fov: 42 }}
         gl={{ antialias: true, powerPreference: 'default' }}
         onCreated={({ gl }) => {

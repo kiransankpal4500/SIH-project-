@@ -60,30 +60,68 @@ async def get_hycom_cache_stats():
     return global_query_cache.stats()
 
 
+@router.get("/hycom/parameters")
+@router.get("/parameters")
+async def get_model_parameters(
+    latitude: float = Query(..., description="Latitude in degrees (-90 to 90)"),
+    longitude: float = Query(..., description="Longitude in degrees (-180 to 360)"),
+    depth: float = Query(0.0, description="Depth in meters below sea level (0 to 6000m)"),
+    time: Optional[str] = Query(None, description="ISO timestamp e.g. 2026-08-28T06:00:00Z"),
+):
+    """
+    Retrieve all 5 core oceanographic parameters (Temperature, Salinity, Geostrophic Current, MLD, Sea Height)
+    in a unified, sub-second single pass.
+    """
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                hycom_service.get_all_parameters,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                time_str=time,
+            ),
+            timeout=5.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Ocean model parameters request timed out.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract ocean parameters: {str(e)}")
+
+
 @router.get("/hycom/point", response_model=OceanModelPoint)
 async def get_hycom_point(
     latitude: float = Query(..., description="Latitude in degrees (-90 to 90)"),
     longitude: float = Query(..., description="Longitude in degrees (-180 to 360)"),
     depth: float = Query(0.0, description="Depth in meters below sea level (0 to 6000m)"),
-    variable: str = Query("temperature", description="Variable: temperature, salinity, current_u, current_v, ssh, mld, tchp"),
+    variable: str = Query("temperature", description="Variable: temperature, salinity, current_u, current_v, current, ssh, height, mld, tchp"),
     time: Optional[str] = Query(None, description="ISO timestamp e.g. 2026-08-28T06:00:00Z"),
 ):
     """
     Extract single point HYCOM model value using nearest-neighbor spatial/temporal indexing with caching.
     """
     try:
-        return await asyncio.to_thread(
-            hycom_service.get_point,
-            latitude=latitude,
-            longitude=longitude,
-            depth=depth,
-            variable=variable,
-            time_str=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                hycom_service.get_point,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                time_str=time,
+            ),
+            timeout=4.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="HYCOM remote service response timed out. Please retry.",
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal point query error: {str(e)}")
+
 
 
 @router.get("/hycom/profile", response_model=OceanModelProfile)
@@ -96,11 +134,19 @@ async def get_hycom_profile(
     Fetch vertical depth profile (temperature & salinity vs depth) from matching INCOIS HYCOM NetCDF dataset with caching.
     """
     try:
-        return await asyncio.to_thread(
-            hycom_service.get_profile,
-            latitude=latitude,
-            longitude=longitude,
-            time_str=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                hycom_service.get_profile,
+                latitude=latitude,
+                longitude=longitude,
+                time_str=time,
+            ),
+            timeout=4.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="HYCOM remote service response timed out. Please retry.",
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -119,12 +165,20 @@ async def get_hycom_current(
     Fetch current velocity vector (u, v), calculate speed (sqrt(u²+v²)) and oceanographic direction with caching.
     """
     try:
-        return await asyncio.to_thread(
-            hycom_service.get_current,
-            latitude=latitude,
-            longitude=longitude,
-            depth=depth,
-            time_str=time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                hycom_service.get_current,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                time_str=time,
+            ),
+            timeout=4.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="HYCOM remote service response timed out. Please retry.",
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -145,14 +199,22 @@ async def get_hycom_timeseries(
     Extract chronological time-series points across all available HYCOM NetCDF dataset files with caching.
     """
     try:
-        return await asyncio.to_thread(
-            hycom_service.get_timeseries,
-            latitude=latitude,
-            longitude=longitude,
-            depth=depth,
-            variable=variable,
-            start_time=start_time,
-            end_time=end_time,
+        return await asyncio.wait_for(
+            asyncio.to_thread(
+                hycom_service.get_timeseries,
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                start_time=start_time,
+                end_time=end_time,
+            ),
+            timeout=5.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="HYCOM remote service response timed out. Please retry.",
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -248,10 +310,10 @@ async def get_copernicus_point(
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,
-            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+            detail="Copernicus remote ocean service response timed out. Please retry.",
         )
     except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
+        raise HTTPException(status_code=503, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 
@@ -271,15 +333,15 @@ async def get_copernicus_profile(
                 longitude=longitude,
                 time=time,
             ),
-            timeout=30.0,
+            timeout=10.0,
         )
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,
-            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+            detail="Copernicus remote ocean service response timed out. Please retry.",
         )
     except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
+        raise HTTPException(status_code=503, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 
@@ -301,15 +363,15 @@ async def get_copernicus_current(
                 depth=depth,
                 time=time,
             ),
-            timeout=30.0,
+            timeout=10.0,
         )
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=504,
-            detail="Remote ocean service is currently slow or unavailable. Please retry.",
+            detail="Copernicus remote ocean service response timed out. Please retry.",
         )
     except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
+        raise HTTPException(status_code=503, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Copernicus ocean data unavailable: {str(e)}")
 

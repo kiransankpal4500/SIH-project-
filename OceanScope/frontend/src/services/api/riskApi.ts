@@ -11,8 +11,10 @@ export class RiskApiClient {
   async getRiskAlerts(demo: boolean = false): Promise<RegionalRiskHotspot[]> {
     try {
       return await safeFetchJson<RegionalRiskHotspot[]>(`${this.baseUrl}/disasters/alerts?demo=${demo}`);
-    } catch (e) {
-      console.warn('Backend /disasters/alerts unreachable, using fallback demo hotspots', e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn('Backend /disasters/alerts unreachable, using fallback demo hotspots', e);
+      }
       return [
         {
           id: 'risk-fallback-01',
@@ -73,8 +75,10 @@ export class RiskApiClient {
       return await safeFetchJson<LocationRiskResponse>(
         `${this.baseUrl}/disasters/risk-at-point?${params.toString()}`
       );
-    } catch (e) {
-      console.warn('Backend /disasters/risk-at-point unreachable, using fallback evaluation', e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn('Backend /disasters/risk-at-point unreachable, using fallback evaluation', e);
+      }
       return {
         latitude,
         longitude,
