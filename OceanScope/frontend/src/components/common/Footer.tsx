@@ -14,11 +14,11 @@ export const Footer: React.FC = () => {
               <img
                 src="/assets/oceanscope-logo.png"
                 alt="OceanScope"
-                width={861}
-                height={290}
+                width={200}
+                height={200}
                 loading="lazy"
                 draggable={false}
-                className="h-8 w-auto object-contain brightness-110"
+                className="h-8 w-8 object-contain brightness-110"
               />
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm font-normal">

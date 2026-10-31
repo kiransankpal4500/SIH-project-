@@ -12,14 +12,14 @@ export const Header: React.FC = () => {
         <img
           src="/assets/oceanscope-logo.png"
           alt="OceanScope"
-          width={861}
-          height={290}
+          width={200}
+          height={200}
           loading="eager"
           decoding="sync"
           draggable={false}
           style={{
             height: '28px',
-            width: 'auto',
+            width: '28px',
             objectFit: 'contain',
             display: 'block',
           }}
@@ -48,10 +48,18 @@ export const Header: React.FC = () => {
             <span className="font-bold">
               {state.isLiveDataMode && state.liveDataStatus === 'LIVE'
                 ? '● LIVE DATA'
+                : state.liveDataStatus === 'FALLBACK'
+                ? '● OFFLINE FALLBACK'
                 : '● DEMO DATA'}
             </span>
             <span className="text-[11px] opacity-80">
-              Source: {state.isLiveDataMode ? 'INCOIS (Indian_ARGO_Floats)' : 'Local Demo Dataset'}
+              Source: {
+                state.isLiveDataMode && state.liveDataStatus === 'LIVE'
+                  ? 'INCOIS (Indian_ARGO_Floats)'
+                  : state.liveDataStatus === 'FALLBACK'
+                  ? 'Offline Fallback (Live Unreachable)'
+                  : 'Local Demo Dataset'
+              }
             </span>
           </div>
         </div>

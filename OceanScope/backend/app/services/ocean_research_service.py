@@ -13,6 +13,7 @@ from app.services.gebco_service import gebco_service
 from app.services.hycom_service import hycom_service
 from app.services.copernicus_service import copernicus_service
 from app.services.argo_service import argo_service
+from app.core.config import settings
 
 logger = logging.getLogger("oceanscope.research_data")
 
@@ -112,7 +113,7 @@ class OceanResearchDataService:
                     longitude=lon,
                     depth=d_val,
                 ),
-                timeout=5.0,
+                timeout=float(getattr(settings, "HYCOM_REMOTE_TIMEOUT_SECONDS", 45.0)),
             )
             if hycom_data:
                 provider_src = hycom_data.get("source", "INCOIS HYCOM GLBy0.08")
@@ -284,7 +285,7 @@ class OceanResearchDataService:
         try:
             profile_model = await asyncio.wait_for(
                 asyncio.to_thread(hycom_service.get_profile, latitude=lat, longitude=lon),
-                timeout=6.0,
+                timeout=float(getattr(settings, "HYCOM_REMOTE_TIMEOUT_SECONDS", 45.0)),
             )
             raw_levels = profile_model.profile or []
             levels = []

@@ -840,7 +840,18 @@ export const OceanChunk3DView: React.FC<OceanChunk3DViewProps> = ({
           powerPreference: 'default',
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.35,
-          preserveDrawingBuffer: true,
+          preserveDrawingBuffer: Boolean(onCaptureReady),
+        }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement;
+          canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[OceanScope] WebGL context lost on OceanChunk3DView. Attempting automatic restoration.');
+          }, false);
+          canvas.addEventListener('webglcontextrestored', () => {
+            console.info('[OceanScope] WebGL context restored on OceanChunk3DView.');
+            gl.renderLists?.dispose?.();
+          }, false);
         }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >

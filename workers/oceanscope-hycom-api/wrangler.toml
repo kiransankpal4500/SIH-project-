@@ -1,0 +1,14 @@
+name = "oceanscope-hycom-api"
+main = "src/index.ts"
+compatibility_date = "2024-10-22"
+compatibility_flags = ["nodejs_compat"]
+
+# Strict Zero-Cost Cloudflare Workers Free Tier Configuration
+# No paid add-ons or automatic upgrades configured.
+
+[vars]
+ENVIRONMENT = "production"
+HYCOM_THREDDS_BASE = "https://tds.hycom.org/thredds/dodsC"
+CACHE_TTL_SECONDS = 86400
+TIMEOUT_MS = 12000
+MAX_RETRIES = 2

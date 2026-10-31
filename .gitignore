@@ -44,4 +44,8 @@ OceanScope/backend/data/netcdf/
 Thumbs.db
 .agents/
 .firebase/
+scratch/
+ENV_CREDENTIALS_BACKUP.md
+*CREDENTIALS*
+*ENV_BACKUP*
 

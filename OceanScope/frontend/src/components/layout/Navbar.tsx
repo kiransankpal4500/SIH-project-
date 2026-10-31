@@ -67,14 +67,14 @@ export const Navbar: React.FC = () => {
           <img
             src="/assets/oceanscope-logo.png"
             alt="OceanScope"
-            width={861}
-            height={290}
+            width={200}
+            height={200}
             loading="eager"
             decoding="sync"
             draggable={false}
             style={{
-              height: '36px',
-              width: 'auto',
+              height: '38px',
+              width: '38px',
               objectFit: 'contain',
               display: 'block',
             }}

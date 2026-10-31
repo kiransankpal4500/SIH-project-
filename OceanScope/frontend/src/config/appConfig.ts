@@ -32,13 +32,13 @@ export function resolveApiBaseUrl(): string {
 
   // Deployed host: If on Firebase Hosting and no env URL set, route to verified Vercel FastAPI backend
   if (isBrowser && (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com'))) {
-    return 'https://sih-project-space-x6.vercel.app/api/v1';
+    return 'https://sih-project-o1qw-ow745bdi6-space-x6.vercel.app/api/v1';
   }
 
   // Fallback for production builds: ensure requests do not hit Firebase Hosting as relative HTML endpoints
   if (import.meta.env.PROD) {
     console.warn('[OceanScope] VITE_API_BASE_URL was not set during build; defaulting to verified backend.');
-    return 'https://sih-project-space-x6.vercel.app/api/v1';
+    return 'https://sih-project-o1qw-ow745bdi6-space-x6.vercel.app/api/v1';
   }
 
   return '/api/v1';

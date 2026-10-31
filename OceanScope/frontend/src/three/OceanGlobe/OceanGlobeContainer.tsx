@@ -97,9 +97,14 @@ export const OceanGlobeContainer: React.FC<OceanGlobeContainerProps> = ({
         camera={{ position: [0, 1.2, 4.8], fov: 42 }}
         gl={{ antialias: true, powerPreference: 'default' }}
         onCreated={({ gl }) => {
-          gl.domElement.addEventListener('webglcontextlost', (e) => {
+          const canvas = gl.domElement;
+          canvas.addEventListener('webglcontextlost', (e) => {
             e.preventDefault();
-            console.warn('[OceanScope] WebGL context lost. Attempting restoration.');
+            console.warn('[OceanScope] WebGL context lost on OceanGlobe. Attempting automatic restoration.');
+          }, false);
+          canvas.addEventListener('webglcontextrestored', () => {
+            console.info('[OceanScope] WebGL context restored on OceanGlobe.');
+            gl.renderLists?.dispose?.();
           }, false);
         }}
         className="w-full h-full cursor-grab active:cursor-grabbing"

@@ -62,9 +62,14 @@ export const DisasterIndicatorCard: React.FC<DisasterIndicatorCardProps> = ({ in
               {(indicator as RegionalRiskHotspot).actual_value} {(indicator as RegionalRiskHotspot).unit}
             </span>
           </div>
-          <div className="col-span-2 text-[10px] text-[#64748B] border-t border-[#E2E8F0] pt-1.5 flex justify-between">
+          <div className="col-span-2 text-[10px] text-[#64748B] border-t border-[#E2E8F0] pt-1.5 flex justify-between items-center">
             <span>Threshold: {(indicator as RegionalRiskHotspot).threshold_used}</span>
-            <span className="text-[#15803D] font-medium">{(indicator as RegionalRiskHotspot).source}</span>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-[#0B84C6] font-medium">{(indicator as RegionalRiskHotspot).source}</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                Model Indicator
+              </span>
+            </div>
           </div>
         </div>
       )}

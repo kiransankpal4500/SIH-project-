@@ -71,12 +71,12 @@ class HYCOMRemoteService:
 
         # Precomputed global temporal index
         self._meta_cache: Optional[OceanModelMetadata] = None
-        self._available_years: List[int] = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+        self._available_years: List[int] = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
         self._dates_by_year: Dict[int, List[str]] = {}
         self._timestamps_by_date: Dict[str, List[str]] = {}
         self._initialized_time_index: bool = False
         self.earliest_iso = "2018-12-04T12:00:00Z"
-        self.latest_iso = "2026-09-03T09:00:00Z"
+        self.latest_iso = "2024-12-31T21:00:00Z"
 
     def _get_dataset(self, key: str, url: str) -> xr.Dataset:
         """Lazily opens and returns a cached remote xarray OPeNDAP dataset reference."""

@@ -49,6 +49,8 @@ class Settings:
     # HYCOM Model Storage & Remote Data Access Configuration
     # Prioritizes local high-performance NetCDF archive (sub-second queries) with fallback capability
     HYCOM_DATA_SOURCE: str = os.getenv("HYCOM_DATA_SOURCE", "local").lower()
+    # Cloudflare Worker HYCOM API Gateway
+    HYCOM_WORKER_URL: str = os.getenv("HYCOM_WORKER_URL", "http://127.0.0.1:8787")
     # Historical archive: GLBy0.08/expt_93.0 (Dec 2018 – Sep 2024)
     HYCOM_REMOTE_OPENDAP_URL: str = os.getenv(
         "HYCOM_REMOTE_OPENDAP_URL", "https://tds.hycom.org/thredds/dodsC/GLBy0.08/expt_93.0"
@@ -59,7 +61,7 @@ class Settings:
         "HYCOM_CURRENT_OPENDAP_BASE", "https://tds.hycom.org/thredds/dodsC/ESPC-D-V02"
     )
     HYCOM_CURRENT_DATASET_ID: str = os.getenv("HYCOM_CURRENT_DATASET_ID", "ESPC-D-V02")
-    HYCOM_REMOTE_TIMEOUT_SECONDS: int = int(os.getenv("HYCOM_REMOTE_TIMEOUT_SECONDS", "15"))
+    HYCOM_REMOTE_TIMEOUT_SECONDS: int = int(os.getenv("HYCOM_REMOTE_TIMEOUT_SECONDS", "45"))
     # In production container, default to persistent volume mount /data/hycom
     HYCOM_DATA_DIRECTORY: str = (
         next(

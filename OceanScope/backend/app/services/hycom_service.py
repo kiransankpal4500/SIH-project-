@@ -27,8 +27,19 @@ from app.schemas.hycom_schemas import (
 )
 from app.services.hycom_dataset_manager import hycom_dataset_manager, HYCOMDatasetManager
 from app.services.hycom_remote_service import hycom_remote_service
+from app.services.hycom_worker_client import (
+    hycom_worker_client,
+    HYCOMTimeoutError,
+    HYCOMGatewayError,
+    HYCOMDatasetUnavailableError as WorkerUnavailableError,
+)
 
 logger = logging.getLogger("oceanscope.hycom_service")
+
+
+class HYCOMDatasetUnavailableError(Exception):
+    """Raised when no valid HYCOM dataset is available (local archive missing or remote unreachable)."""
+    pass
 
 
 class INCOISHYCOMService:
@@ -39,6 +50,7 @@ class INCOISHYCOMService:
     ):
         self.dataset_manager = dataset_manager or hycom_dataset_manager
         self.remote_service = hycom_remote_service
+        self.worker_client = hycom_worker_client
         self.cache = cache or global_query_cache
         self.cache_ttl = 300  # 5 minutes TTL
 
@@ -162,6 +174,15 @@ class INCOISHYCOMService:
         """
         self.validate_coordinates(latitude, longitude, depth)
 
+        if settings.HYCOM_DATA_SOURCE == "worker" or (settings.HYCOM_DATA_SOURCE != "local" and getattr(settings, "HYCOM_WORKER_URL", None)):
+            return self.worker_client.get_point(
+                latitude=latitude,
+                longitude=longitude,
+                depth=depth,
+                variable=variable,
+                time_str=time_str,
+            )
+
         if settings.HYCOM_DATA_SOURCE == "remote":
             return self.remote_service.get_point(
                 latitude=latitude,
@@ -177,13 +198,14 @@ class INCOISHYCOMService:
         if cached:
             logger.debug(f"[CACHE HIT] Point query for {variable} at ({latitude}, {longitude}) in {(time.time() - t0)*1000:.2f}ms")
             return cached
-            return cached
 
         filepath, filename, sel_model_time, time_diff_hours, ds, var_mapping, dim_mapping = (
             self.dataset_manager.select_file_for_time(time_str)
         )
 
         if ds is None or not filename:
+            if getattr(settings, "HYCOM_WORKER_URL", None):
+                return self.worker_client.get_point(latitude, longitude, depth, variable, time_str)
             raise ValueError("No valid HYCOM dataset available for point query.")
 
         # Canonical alias handling
@@ -309,12 +331,26 @@ class INCOISHYCOMService:
         """
         self.validate_coordinates(latitude, longitude, 0.0)
 
-        if settings.HYCOM_DATA_SOURCE == "remote":
-            return self.remote_service.get_profile(
+        if settings.HYCOM_DATA_SOURCE == "worker" or (settings.HYCOM_DATA_SOURCE != "local" and getattr(settings, "HYCOM_WORKER_URL", None)):
+            return self.worker_client.get_profile(
                 latitude=latitude,
                 longitude=longitude,
                 time_str=time_str,
             )
+
+        if settings.HYCOM_DATA_SOURCE == "remote":
+            try:
+                return self.remote_service.get_profile(
+                    latitude=latitude,
+                    longitude=longitude,
+                    time_str=time_str,
+                )
+            except Exception as e:
+                logger.error(f"Remote HYCOM profile query failed: {e}")
+                raise HYCOMDatasetUnavailableError(
+                    f"Remote HYCOM OPeNDAP service unavailable: {str(e)}. "
+                    "External THREDDS server is unreachable or timed out."
+                )
 
         t0 = time.time()
         cache_key = f"prof_{latitude:.3f}_{longitude:.3f}_{time_str or 'latest'}"
@@ -328,7 +364,13 @@ class INCOISHYCOMService:
         )
 
         if ds is None or not filename:
-            raise ValueError("No valid HYCOM dataset available for vertical profile query.")
+            if getattr(settings, "HYCOM_WORKER_URL", None):
+                logger.info("Local NetCDF archive missing; routing profile query to HYCOM worker")
+                return self.worker_client.get_profile(latitude, longitude, time_str)
+            raise HYCOMDatasetUnavailableError(
+                "No valid HYCOM dataset available for vertical profile query. "
+                "Local NetCDF storage is empty or unmounted in this environment."
+            )
 
         lat_dim = dim_mapping.get("latitude", "latitude")
         lon_dim = dim_mapping.get("longitude", "longitude")

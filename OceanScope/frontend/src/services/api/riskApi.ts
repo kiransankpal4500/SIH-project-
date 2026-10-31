@@ -30,9 +30,11 @@ export class RiskApiClient {
           actual_value: 0.496,
           unit: 'm',
           threshold_used: '0.35 - 0.60 m (HIGH)',
-          source: demo ? 'Local Demo Dataset' : 'INCOIS HYCOM',
-          why_reason: 'Sea Surface Height (0.496 m) met configured demonstration threshold (0.35 - 0.60 m (HIGH)).',
-          is_live_data: !demo,
+          source: demo ? 'Local Demo Dataset' : 'Offline Fallback (Live Unreachable)',
+          why_reason: demo
+            ? 'Sea Surface Height (0.496 m) met configured demonstration threshold (0.35 - 0.60 m (HIGH)).'
+            : 'Live disaster API unreachable. Showing baseline demonstration hotspot.',
+          is_live_data: false,
         },
         {
           id: 'risk-fallback-02',
@@ -48,9 +50,11 @@ export class RiskApiClient {
           actual_value: 129.0,
           unit: 'kJ/cm²',
           threshold_used: '>= 110.0 kJ/cm² (CRITICAL)',
-          source: demo ? 'Local Demo Dataset' : 'INCOIS HYCOM',
-          why_reason: 'TCHP (129.0 kJ/cm²) exceeded configured threshold (>= 110.0 kJ/cm² (CRITICAL)).',
-          is_live_data: !demo,
+          source: demo ? 'Local Demo Dataset' : 'Offline Fallback (Live Unreachable)',
+          why_reason: demo
+            ? 'TCHP (129.0 kJ/cm²) exceeded configured threshold (>= 110.0 kJ/cm² (CRITICAL)).'
+            : 'Live disaster API unreachable. Showing baseline demonstration hotspot.',
+          is_live_data: false,
         },
       ];
     }
@@ -89,9 +93,11 @@ export class RiskApiClient {
         primary_factor_value: 0.68,
         primary_factor_unit: 'm/s',
         primary_threshold: '0.50 - 0.90 m/s (MODERATE)',
-        why_reason: 'Ocean Current Speed (0.68 m/s) met configured demonstration threshold (0.50 - 0.90 m/s).',
-        source: demo ? 'Local Demo Dataset' : 'INCOIS HYCOM',
-        is_live_data: !demo,
+        why_reason: demo
+          ? 'Ocean Current Speed (0.68 m/s) met configured demonstration threshold (0.50 - 0.90 m/s).'
+          : 'Live risk evaluation API unreachable. Showing fallback demonstration evaluation.',
+        source: demo ? 'Local Demo Dataset' : 'Offline Fallback (Live Unreachable)',
+        is_live_data: false,
         factors: [
           {
             name: 'Ocean Current Speed',

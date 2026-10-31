@@ -16,8 +16,14 @@ from app.schemas.hycom_schemas import (
     ModelObservationComparisonResponse,
     HYCOMTimestampsResponse,
 )
+from app.core.config import settings
 from app.services.ocean_service import OceanService
-from app.services.hycom_service import hycom_service
+from app.services.hycom_service import hycom_service, HYCOMDatasetUnavailableError
+from app.services.hycom_worker_client import (
+    HYCOMTimeoutError,
+    HYCOMGatewayError,
+    HYCOMDatasetUnavailableError as WorkerUnavailableError,
+)
 from app.services.argo_service import argo_service
 from app.services.copernicus_service import copernicus_service
 from app.core.query_cache import global_query_cache
@@ -110,13 +116,17 @@ async def get_hycom_point(
                 variable=variable,
                 time_str=time,
             ),
-            timeout=4.0,
+            timeout=float(getattr(settings, "HYCOM_REMOTE_TIMEOUT_SECONDS", 15)),
         )
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, HYCOMTimeoutError):
         raise HTTPException(
             status_code=504,
             detail="HYCOM remote service response timed out. Please retry.",
         )
+    except HYCOMGatewayError as ge:
+        raise HTTPException(status_code=502, detail=str(ge))
+    except (HYCOMDatasetUnavailableError, WorkerUnavailableError) as ue:
+        raise HTTPException(status_code=503, detail=str(ue))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -141,13 +151,17 @@ async def get_hycom_profile(
                 longitude=longitude,
                 time_str=time,
             ),
-            timeout=4.0,
+            timeout=float(getattr(settings, "HYCOM_REMOTE_TIMEOUT_SECONDS", 15)),
         )
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, HYCOMTimeoutError):
         raise HTTPException(
             status_code=504,
             detail="HYCOM remote service response timed out. Please retry.",
         )
+    except HYCOMGatewayError as ge:
+        raise HTTPException(status_code=502, detail=str(ge))
+    except (HYCOMDatasetUnavailableError, WorkerUnavailableError) as ue:
+        raise HTTPException(status_code=503, detail=str(ue))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -180,6 +194,8 @@ async def get_hycom_current(
             status_code=504,
             detail="HYCOM remote service response timed out. Please retry.",
         )
+    except HYCOMDatasetUnavailableError as ue:
+        raise HTTPException(status_code=503, detail=str(ue))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -216,6 +232,8 @@ async def get_hycom_timeseries(
             status_code=504,
             detail="HYCOM remote service response timed out. Please retry.",
         )
+    except HYCOMDatasetUnavailableError as ue:
+        raise HTTPException(status_code=503, detail=str(ue))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
